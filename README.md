@@ -1,6 +1,12 @@
 # mocat
 Create, tune and compare Monte Carlo algorithms in JAX.
 
+## Install
+```
+pip install mocat
+```
+
+
 ## Define a target distribution
 We work with the target's potential (negative log density)
 ```python
@@ -26,8 +32,6 @@ class Rastrigin(mocat.Scenario):
 ## Compare samplers
 Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a desired acceptance rate
 ```python
-from jax import numpy as np, random
-import mocat
 random_key = random.PRNGKey(0)
 
 scenario_rastrigin = Rastrigin(5)
