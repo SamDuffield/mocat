@@ -59,7 +59,7 @@ class DoubleWell(TwoDimScenario, NDDoubleWell):
 
 class Rastrigin(TwoDimScenario, NDRastrigin):
     def __init__(self,
-                 a: float = 0.5):
+                 a: float = 1.):
         TwoDimScenario.__init__(self)
         NDRastrigin.__init__(self, dim=2, a=a)
 

@@ -172,7 +172,7 @@ class Underdamped(MCMCSampler):
     def __init__(self,
                  stepsize: float = None,
                  leapfrog_steps: int = None,
-                 friction: float = 0.1):
+                 friction: float = 1.0):
         super().__init__()
         self.parameters.stepsize = stepsize
         self.parameters.leapfrog_steps = leapfrog_steps
