@@ -5,7 +5,6 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from __future__ import annotations
 from functools import partial
 from typing import Union
 from pathlib import Path
@@ -44,7 +43,7 @@ class Scenario:
     def __repr__(self):
         return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"
 
-    def copy(self) -> Scenario:
+    def copy(self) -> 'Scenario':
         return copy.deepcopy(self)
 
     def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
@@ -59,7 +58,7 @@ class CDict:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    def copy(self) -> CDict:
+    def copy(self) -> 'CDict':
         return CDict(**self.__dict__)
 
     def __repr__(self):
@@ -78,7 +77,7 @@ class CDict:
         return cls(**dict(zip(keys, xs)))
 
     def __getitem__(self,
-                    item: Union[int, slice, np.ndarray]) -> CDict:
+                    item: Union[int, slice, np.ndarray]) -> 'CDict':
         if isinstance(item, int):
             return self.__get_int(item)
         else:
@@ -86,11 +85,11 @@ class CDict:
 
     @partial(jit, static_argnums=(0,))
     def __get_int(self,
-                  int_item: int) -> CDict:
+                  int_item: int) -> 'CDict':
         return self.__get_general(int_item)
 
     def __get_general(self,
-                      item: Union[str, int, slice, np.ndarray]) -> CDict:
+                      item: Union[str, int, slice, np.ndarray]) -> 'CDict':
         if isinstance(item, str):
             return self.__dict__[item]
 
@@ -101,7 +100,7 @@ class CDict:
         return out_cdict
 
     def __add__(self,
-                other: CDict) -> CDict:
+                other: 'CDict') -> 'CDict':
         out_cdict = self.copy()
         for key, attr in out_cdict.__dict__.items():
             if isinstance(attr, np.ndarray) and hasattr(other, key):
@@ -173,7 +172,7 @@ class Sampler:
     def __repr__(self):
         return f"mocat.Sampler.{self.__class__.__name__}({self.__dict__.__repr__()})"
 
-    def copy(self) -> Sampler:
+    def copy(self) -> 'Sampler':
         return copy.deepcopy(self)
 
     def startup(self,
