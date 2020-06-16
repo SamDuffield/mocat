@@ -24,7 +24,7 @@ class Rastrigin(mocat.Scenario):
 
 
 ## Compare samplers
-Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a target acceptance rate
+Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a desired acceptance rate
 ```python
 from jax import numpy as np, random
 import mocat
