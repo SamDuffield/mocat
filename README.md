@@ -24,7 +24,7 @@ class Rastrigin(mocat.Scenario):
 
 
 ## Compare samplers
-Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a target acceptance rate
+Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a desired acceptance rate
 ```python
 from jax import numpy as np, random
 import mocat
@@ -55,7 +55,7 @@ mocat.autocorrelation_plot(mala_samps, ax=axes[2,0], title=None)
 mocat.autocorrelation_plot(hmc_samps, ax=axes[2,1], title=None)
 plt.tight_layout()
 ```
-![comp-metrics](images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
+![comp-metrics](images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin" | width=80)
 
 Plus functionality for effective sample size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
 
