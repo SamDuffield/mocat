@@ -181,9 +181,6 @@ class RunVis:
             self.sampler.initial_state._all_leapfrog_momenta = np.zeros((2 * self.sampler.parameters.leapfrog_steps + 1,
                                                                          *self.sampler.initial_state.momenta.shape))
 
-        if self.ensemble:
-            self.ensemble_index = 0
-
         self.run_params = mcmc_run_params(sampler, correction)
         self.corrected_samples, self.corrected_extras, self.proposed_samples = self.utils.vis_run_mcmc(self.scenario,
                                                                                                        self.sampler,
@@ -191,7 +188,7 @@ class RunVis:
                                                                                                        self.correction)
 
         self.reject_state = self.corrected_samples[0]
-        self.reject_extra = self.corrected_extras[0]
+        self.reject_extra = self.corrected_extras[1]
         self.proposed_state = self.proposed_samples[1]
         self.corrected_state = self.corrected_samples[1]
 
@@ -230,20 +227,19 @@ class RunVis:
 
         if self.live_frame_index == (self.frames_per_sample - 1):
 
-            if self.ensemble:
-                self.full_state_points.set_offsets(np.concatenate(self.corrected_samples.value[:self.sample_index + 1]))
-                self.ensemble_index = (self.ensemble_index + 1) % self.sampler.parameters.n_ensemble
-            else:
-                self.full_state_points.set_offsets(self.corrected_samples.value[:self.sample_index + 1])
-
             self.live_state_points.set_offsets(self.corrected_state.value)
 
             self.check_deexpand_lims()
             self.sample_index += 1
             self.reject_state = self.corrected_samples[self.sample_index - 1]
-            self.reject_extra = self.corrected_extras[self.sample_index - 1]
+            self.reject_extra = self.corrected_extras[self.sample_index]
             self.proposed_state = self.proposed_samples[self.sample_index]
             self.corrected_state = self.corrected_samples[self.sample_index]
+            
+            if self.ensemble:
+                self.full_state_points.set_offsets(np.concatenate(self.corrected_samples.value[:self.sample_index]))
+            else:
+                self.full_state_points.set_offsets(self.corrected_samples.value[:self.sample_index])
 
         self.live_frame_index = (self.live_frame_index + 1) % self.frames_per_sample
 
@@ -303,10 +299,11 @@ class UncorrectedRunVis(RunVis):
 
             if prop_pot.shape == (3, 3):
                 self.proposal_potential_available = True
+            else:
+                self.proposal_potential_available = False
 
         except AttributeError:
             self.proposal_potential_available = False
-
 
     def update_proposed_points(self):
         if self.proposal_potential_available:
@@ -327,7 +324,7 @@ class UncorrectedRunVis(RunVis):
             if self.requires_gradient:
                 if self.proposed_state.value.ndim == 2:
                     alphas = np.where(np.arange(self.sampler.parameters.n_ensemble)
-                                      == self.sample_index % self.sampler.parameters.n_ensemble,
+                                      == self.reject_extra.iter % self.sampler.parameters.n_ensemble,
                                       self.utils.gradient_alpha, 0.)
                 else:
                     alphas = self.utils.gradient_alpha
@@ -360,7 +357,7 @@ class UncorrectedRunVis(RunVis):
                 self.utils.remove_collection(self.arrows)
 
             alphas = np.where(np.arange(self.sampler.parameters.n_ensemble)
-                              == self.sample_index % self.sampler.parameters.n_ensemble,
+                              == self.reject_extra.iter % self.sampler.parameters.n_ensemble,
                               0., self.utils.gradient_alpha)
 
             self.arrows = self.utils.arrows(self.ax,
@@ -396,7 +393,7 @@ class MHRunVis(UncorrectedRunVis):
                  correction: Correction,
                  n: int,
                  utils: RunVisUtils = RunVisUtils()):
-        super(UncorrectedRunVis, self).__init__(ax, scenario, sampler, correction, n, utils)
+        super().__init__(ax, scenario, sampler, correction, n, utils)
         self.frames_per_sample = 3 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 3
 
     def run_vis(self):
@@ -426,7 +423,7 @@ def visualise(scenario: TwoDimScenario,
               correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
               run_vis: Type[RunVis] = None,
               n: int = 100,
-              ms_per_sample: float = 1300,
+              ms_per_sample: float = 2000,
               potential: bool = False,
               return_sample: bool = False,
               utils: RunVisUtils = RunVisUtils(),

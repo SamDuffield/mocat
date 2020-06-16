@@ -5,10 +5,11 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Tuple
+from typing import Tuple, Union
 
 import jax.numpy as np
 from jax import random, vmap
+from jax.lax import cond
 from jax.ops import index_update
 
 from mocat.src.mcmc.sampler import MCMCSampler, default_initial_extra
@@ -37,9 +38,9 @@ class EnsembleRWMH(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 random_key: np.ndarray):
-        if self.initial_state is None\
-                or not hasattr(self.initial_state, 'value')\
-                or self.initial_state.value.shape[-1] != scenario.dim\
+        if self.initial_state is None \
+                or not hasattr(self.initial_state, 'value') \
+                or self.initial_state.value.shape[-1] != scenario.dim \
                 or self.initial_state.value.shape[1] != self.parameters.n_ensemble:
             random_key, sub_key = random.split(random_key)
 
@@ -82,11 +83,8 @@ class EnsembleRWMH(MCMCSampler):
     def acceptance_probability(self,
                                scenario: Scenario,
                                reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> np.ndarray:
+                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
         ensemble_index = reject_extra.iter % self.parameters.n_ensemble
-
-        proposed_state.potential = index_update(proposed_state.potential, ensemble_index,
-                                                scenario.potential(proposed_state.value[ensemble_index]))
         return np.minimum(1., np.exp(- proposed_state.potential[ensemble_index]
                                      + reject_state.potential[ensemble_index]))
 
@@ -111,9 +109,9 @@ class EnsembleOverdamped(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 random_key: np.ndarray):
-        if self.initial_state is None\
-                or not hasattr(self.initial_state, 'value')\
-                or self.initial_state.value.shape[-1] != scenario.dim\
+        if self.initial_state is None \
+                or not hasattr(self.initial_state, 'value') \
+                or self.initial_state.value.shape[-1] != scenario.dim \
                 or self.initial_state.value.shape[1] != self.parameters.n_ensemble:
             random_key, sub_key = random.split(random_key)
 
@@ -138,8 +136,11 @@ class EnsembleOverdamped(MCMCSampler):
         leave_one_out_ensemble = np.where(np.expand_dims(np.arange(n_ensemble - 1), 1) < ensemble_index,
                                           ensemble[:-1],
                                           ensemble[1:])
-        leave_one_out_cov = samp_cov_scaling * np.atleast_2d(np.cov(leave_one_out_ensemble.T)) + identity_scaling * np.eye(d)
+        leave_one_out_cov = samp_cov_scaling * np.atleast_2d(
+            np.cov(leave_one_out_ensemble.T)) + identity_scaling * np.eye(d)
         reject_extra.leave_one_out_cov = leave_one_out_cov
+        reject_extra.leave_one_out_prec = np.linalg.inv(leave_one_out_cov)
+        reject_extra.leave_one_out_cov_sqrt = np.linalg.cholesky(leave_one_out_cov)
         return reject_state, reject_extra
 
     def proposal(self,
@@ -155,7 +156,7 @@ class EnsembleOverdamped(MCMCSampler):
         stepsize = reject_extra.parameters.stepsize
 
         leave_one_out_cov = reject_extra.leave_one_out_cov
-        leave_one_out_cov_sqrt = np.linalg.cholesky(leave_one_out_cov)
+        leave_one_out_cov_sqrt = reject_extra.leave_one_out_cov_sqrt
 
         reject_extra.random_key, subkey = random.split(reject_extra.random_key)
 
@@ -173,29 +174,39 @@ class EnsembleOverdamped(MCMCSampler):
 
         return proposed_state, reject_extra
 
-    def acceptance_probability(self,
-                               scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> np.ndarray:
+    def proposal_potential(self,
+                           scenario: Scenario,
+                           reject_state: CDict, reject_extra: CDict,
+                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
         ensemble_index = reject_extra.iter % self.parameters.n_ensemble
         stepsize = reject_extra.parameters.stepsize
         leave_one_out_cov = reject_extra.leave_one_out_cov
-        leave_one_out_prec = np.linalg.inv(leave_one_out_cov)
+        leave_one_out_prec = reject_extra.leave_one_out_prec
 
-        proposed_state.potential = index_update(proposed_state.potential, ensemble_index,
-                                                scenario.potential(proposed_state.value[ensemble_index]))
+        if proposed_state.value.ndim == 2:
+            prop_val = proposed_state.value[ensemble_index]
+        else:
+            prop_val = proposed_state.value
+
+        return utils.gaussian_potential(prop_val,
+                                        reject_state.value[ensemble_index]
+                                        - stepsize * leave_one_out_cov @
+                                        reject_state.grad_potential[ensemble_index],
+                                        leave_one_out_prec / (2 * stepsize))
+
+    def acceptance_probability(self,
+                               scenario: Scenario,
+                               reject_state: CDict, reject_extra: CDict,
+                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+        ensemble_index = reject_extra.iter % self.parameters.n_ensemble
 
         pre_min_alpha = np.exp(- proposed_state.potential[ensemble_index]
                                + reject_state.potential[ensemble_index]
-                               - utils.gaussian_potential(reject_state.value[ensemble_index],
-                                                          proposed_state.value[ensemble_index]
-                                                          - stepsize * leave_one_out_cov @
-                                                          proposed_state.grad_potential[ensemble_index],
-                                                          leave_one_out_prec / (2 * stepsize))
-                               + utils.gaussian_potential(proposed_state.value[ensemble_index],
-                                                          reject_state.value[ensemble_index]
-                                                          - stepsize * leave_one_out_cov @
-                                                          reject_state.grad_potential[ensemble_index],
-                                                          leave_one_out_prec / (2 * stepsize)))
+                               - self.proposal_potential(scenario,
+                                                         proposed_state, proposed_extra,
+                                                         reject_state, reject_extra)
+                               + self.proposal_potential(scenario,
+                                                         reject_state, reject_extra,
+                                                         proposed_state, proposed_extra))
 
         return np.minimum(1., pre_min_alpha)
