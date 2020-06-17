@@ -26,8 +26,8 @@ class EnsembleRWMH(MCMCSampler):
     def __init__(self,
                  stepsize: float = None,
                  n_ensemble: int = None,
-                 identity_scaling: float = 0.1,
-                 samp_cov_scaling: float = 1.):
+                 identity_scaling: float = 0.5,
+                 samp_cov_scaling: float = 0.5):
         super().__init__()
         self.parameters.stepsize = stepsize
         self.parameters.n_ensemble = n_ensemble
@@ -97,8 +97,8 @@ class EnsembleOverdamped(MCMCSampler):
     def __init__(self,
                  stepsize: float = None,
                  n_ensemble: int = None,
-                 identity_scaling: float = 0.1,
-                 samp_cov_scaling: float = 1.):
+                 identity_scaling: float = 0.5,
+                 samp_cov_scaling: float = 0.5):
         super().__init__()
         self.parameters.stepsize = stepsize
         self.parameters.n_ensemble = n_ensemble

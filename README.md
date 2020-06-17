@@ -8,7 +8,7 @@ pip install mocat
 
 
 ## Define a target distribution
-We work with the target's potential (negative log density)
+We always work with the target's potential (negative log density)
 ```python
 from jax import numpy as np, random
 import matplotlib.pyplot as plt
@@ -73,7 +73,7 @@ class Underdamped(mocat.MCMCSampler):
 
     def __init__(self,
                  stepsize = None,
-                 leapfrog_steps = None,
+                 leapfrog_steps = 1,
                  friction = 1.0):
         super().__init__()
         self.parameters.stepsize = stepsize
@@ -101,7 +101,6 @@ class Underdamped(mocat.MCMCSampler):
         return reject_state, reject_extra
 
     def proposal(self, scenario, reject_state, reject_extra):
-        
         stepsize = reject_extra.parameters.stepsize
         
         proposed_state = mocat.utils.leapfrog(reject_state,

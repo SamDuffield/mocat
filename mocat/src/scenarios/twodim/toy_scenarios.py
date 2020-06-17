@@ -42,8 +42,6 @@ class NealFunnel(TwoDimScenario):
 
 
 class GaussianMixture(TwoDimScenario, NDGaussianMixture):
-    dim = 2
-
     def __init__(self,
                  means: np.ndarray = np.array([[-2, -2], [2, -2], [-2, 2], [2, 2]]),
                  **kwargs):
