@@ -59,7 +59,7 @@ mocat.autocorrelation_plot(mala_samps, ax=axes[2,0], title=None)
 mocat.autocorrelation_plot(hmc_samps, ax=axes[2,1], title=None)
 plt.tight_layout()
 ```
-![comp-metrics](images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
+![comp-metrics](examples/images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
 
 Plus functionality for effective sample size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
 

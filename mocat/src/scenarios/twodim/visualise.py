@@ -219,18 +219,6 @@ class RunVis:
         self.sample_index = 1
         self.live_frame_index = 0
 
-        # self.scenario.auto_axes_lims()
-        # self.scenario.xlim = (min(self.scenario.xlim[0], self.samp_xlim[0]),
-        #                       max(self.scenario.xlim[1], self.samp_xlim[1]))
-        # self.scenario.ylim = (min(self.scenario.ylim[0], self.samp_ylim[0]),
-        #                       max(self.scenario.ylim[1], self.samp_ylim[1]))
-        #
-        # self.ax.set_xlim(*self.scenario.xlim)
-        # self.ax.set_ylim(*self.scenario.ylim)
-        # self.scenario_dens = self.utils.scenario_contours(self.ax, self.scenario, self.utils.plot_scen_potential)
-        # self.plot_space = _generate_plot_grid(self.scenario.xlim, self.scenario.ylim,
-        #                                       self.scenario.plot_resolution, True)
-
     def __call__(self, i):
 
         if i == 0:
@@ -273,6 +261,8 @@ class UncorrectedRunVis(RunVis):
         self.frames_per_sample = 2 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 2
 
         if self.ensemble:
+            # Add new empty axis - will be called on this axis with ensemble_index > 0
+            # Utilises JAX convention on array overindexing
             self.prop_pot_plot_space = CDict(value=self.plot_space[2][np.newaxis])
         else:
             self.prop_pot_plot_space = CDict(value=self.plot_space[2])
