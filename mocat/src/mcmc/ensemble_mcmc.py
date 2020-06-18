@@ -183,12 +183,7 @@ class EnsembleOverdamped(MCMCSampler):
         leave_one_out_cov = reject_extra.leave_one_out_cov
         leave_one_out_prec = reject_extra.leave_one_out_prec
 
-        if proposed_state.value.ndim == 2:
-            prop_val = proposed_state.value[ensemble_index]
-        else:
-            prop_val = proposed_state.value
-
-        return utils.gaussian_potential(prop_val,
+        return utils.gaussian_potential(proposed_state.value[ensemble_index],
                                         reject_state.value[ensemble_index]
                                         - stepsize * leave_one_out_cov @
                                         reject_state.grad_potential[ensemble_index],

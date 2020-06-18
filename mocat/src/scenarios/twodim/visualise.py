@@ -203,10 +203,6 @@ class RunVis:
         self.full_state_points = None
         self.live_state_points = None
 
-    def anim_init(self):
-        self.sample_index = 1
-        self.live_frame_index = 0
-
         self.scenario.auto_axes_lims()
         self.scenario.xlim = (min(self.scenario.xlim[0], self.samp_xlim[0]),
                               max(self.scenario.xlim[1], self.samp_xlim[1]))
@@ -218,8 +214,22 @@ class RunVis:
         self.scenario_dens = self.utils.scenario_contours(self.ax, self.scenario, self.utils.plot_scen_potential)
         self.plot_space = _generate_plot_grid(self.scenario.xlim, self.scenario.ylim,
                                               self.scenario.plot_resolution, True)
-        
-        return self.scenario_dens.collections
+
+    def anim_init(self):
+        self.sample_index = 1
+        self.live_frame_index = 0
+
+        # self.scenario.auto_axes_lims()
+        # self.scenario.xlim = (min(self.scenario.xlim[0], self.samp_xlim[0]),
+        #                       max(self.scenario.xlim[1], self.samp_xlim[1]))
+        # self.scenario.ylim = (min(self.scenario.ylim[0], self.samp_ylim[0]),
+        #                       max(self.scenario.ylim[1], self.samp_ylim[1]))
+        #
+        # self.ax.set_xlim(*self.scenario.xlim)
+        # self.ax.set_ylim(*self.scenario.ylim)
+        # self.scenario_dens = self.utils.scenario_contours(self.ax, self.scenario, self.utils.plot_scen_potential)
+        # self.plot_space = _generate_plot_grid(self.scenario.xlim, self.scenario.ylim,
+        #                                       self.scenario.plot_resolution, True)
 
     def __call__(self, i):
 
@@ -227,7 +237,7 @@ class RunVis:
             self.full_state_points = self.utils.full_state_points(self.ax, self.reject_state.value[np.newaxis])
             self.live_state_points = self.utils.live_state_points(self.ax, self.reject_state.value)
 
-        run_vis_artists = self.run_vis()
+        self.run_vis()
 
         if self.live_frame_index == (self.frames_per_sample - 1):
 
@@ -246,8 +256,6 @@ class RunVis:
 
         self.live_frame_index = (self.live_frame_index + 1) % self.frames_per_sample
 
-        return [self.full_state_points, self.live_state_points] + run_vis_artists
-
     def run_vis(self):
         raise NotImplementedError
 
@@ -264,12 +272,17 @@ class UncorrectedRunVis(RunVis):
         super().__init__(ax, scenario, sampler, correction, n, utils)
         self.frames_per_sample = 2 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 2
 
+        if self.ensemble:
+            self.prop_pot_plot_space = CDict(value=self.plot_space[2][np.newaxis])
+        else:
+            self.prop_pot_plot_space = CDict(value=self.plot_space[2])
+
         try:
             prop_pot = self.sampler.proposal_potential(self.scenario,
                                                        self.corrected_samples[0], self.corrected_extras[0],
-                                                       CDict(value=np.zeros((3, 3, 2))), self.corrected_extras[1])
+                                                       self.prop_pot_plot_space, self.corrected_extras[1])
 
-            if prop_pot.shape == (3, 3):
+            if prop_pot.shape == self.plot_space[2].shape[:2]:
                 self.proposal_potential_available = True
             else:
                 self.proposal_potential_available = False
@@ -278,12 +291,10 @@ class UncorrectedRunVis(RunVis):
             self.proposal_potential_available = False
 
     def update_proposed_points(self):
-        out_artists = []
-
         if self.proposal_potential_available:
             z_proposal_potential = self.sampler.proposal_potential(self.scenario,
                                                                    self.reject_state, self.reject_extra,
-                                                                   CDict(value=self.plot_space[2]), self.reject_extra)
+                                                                   self.prop_pot_plot_space, self.reject_extra)
 
             z_proposal_dens = np.exp(-z_proposal_potential)
             self.proposal_dens_contours = self.utils.proposal_contours(self.ax,
@@ -291,10 +302,7 @@ class UncorrectedRunVis(RunVis):
                                                                        self.plot_space[1],
                                                                        z_proposal_dens)
 
-            out_artists = out_artists + self.proposal_dens_contours.collections
-
         self.proposed_points = self.utils.proposed_points(self.ax, self.proposed_state.value)
-        out_artists.append(self.proposed_points)
 
         if not self.leapfrog and not hasattr(self.proposed_state, 'momenta'):
             self.arrows = self.utils.arrows(self.ax, self.reject_state.value, self.proposed_state.value)
@@ -311,9 +319,6 @@ class UncorrectedRunVis(RunVis):
                                                               - self.reject_state.grad_potential,
                                                               alpha=alphas)
 
-                out_artists = out_artists + self.arrows
-        return out_artists
-
     def clear_live_points(self):
         if self.leapfrog:
             self.utils.remove_collection(self.leapfrog_points)
@@ -324,8 +329,6 @@ class UncorrectedRunVis(RunVis):
         if self.proposal_potential_available:
             self.utils.remove_collection(self.proposal_dens_contours)
 
-        return []
-
     def update_leapfrog_points(self):
         leapfrog_x = self.proposed_state._all_leapfrog_value
         leapfrog_p = self.proposed_state._all_leapfrog_momenta
@@ -333,7 +336,6 @@ class UncorrectedRunVis(RunVis):
         if self.live_frame_index > 0:
             self.utils.remove_collection(self.leapfrog_points)
         self.leapfrog_points = self.utils.leapfrog_points(self.ax, leapfrog_x[:self.live_frame_index + 2])
-        out_artists = self.leapfrog_points
 
         if hasattr(self.proposed_state, 'momenta') and self.proposed_state.value.ndim == 2:
             if hasattr(self, 'arrows'):
@@ -349,22 +351,20 @@ class UncorrectedRunVis(RunVis):
                                             + self.reject_extra.parameters.stepsize * leapfrog_p[
                                                 2 * self.live_frame_index + 2],
                                             alpha=alphas)
-            out_artists = out_artists + self.arrows
-        return  out_artists
 
     def run_vis(self):
 
         if self.live_frame_index == self.frames_per_sample - 2:
-            return self.update_proposed_points()
+            self.update_proposed_points()
 
         elif self.live_frame_index == self.frames_per_sample - 1:
-            return self.clear_live_points()
+            self.clear_live_points()
 
         elif self.live_frame_index >= self.frames_per_sample:
-            raise IndexError("Visualisation live_frame_index exceeded frames_per_sample")
+            IndexError("Visualisation live_frame_index exceeded frames_per_sample")
 
         else:
-            return self.update_leapfrog_points()
+            self.update_leapfrog_points()
 
 
 class MHRunVis(UncorrectedRunVis):
@@ -382,37 +382,36 @@ class MHRunVis(UncorrectedRunVis):
     def run_vis(self):
 
         if self.live_frame_index == self.frames_per_sample - 3:
-            return super().update_proposed_points()
+            super().update_proposed_points()
 
         elif self.live_frame_index == self.frames_per_sample - 2:
             if np.array_equal(self.proposed_state.value, self.corrected_state.value):
                 self.proposed_points.set_color('green')
             else:
                 self.proposed_points.set_color('red')
-            return [self.proposed_points]
 
         elif self.live_frame_index == self.frames_per_sample - 1:
-            return super().clear_live_points()
+            super().clear_live_points()
 
         elif self.live_frame_index >= self.frames_per_sample:
             raise IndexError("Visualisation live_frame_index exceeded frames_per_sample")
 
         else:
-            return super().update_leapfrog_points()
+            super().update_leapfrog_points()
 
 
 def visualise(scenario: TwoDimScenario,
               sampler: MCMCSampler,
               random_key: np.ndarray,
               correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
-              run_vis: Type[RunVis] = None,
+              run_vis: Union[RunVis, Type[RunVis]] = None,
               n: int = 100,
               ms_per_sample: float = 1500,
               potential: bool = False,
               return_sample: bool = False,
               utils: RunVisUtils = RunVisUtils(),
               **kwargs):
-    sampler, correction = startup_mcmc(scenario, sampler, random_key, correction, **kwargs)
+    sampler, correction = startup_mcmc(scenario, sampler, random_key, correction)
 
     utils.plot_scen_potential = potential
 
@@ -428,9 +427,7 @@ def visualise(scenario: TwoDimScenario,
             raise ValueError(f'RunVis not found for correction: {correction}')
     elif isclass(run_vis) and issubclass(run_vis, RunVis):
         run_vis = run_vis(ax, scenario, sampler, correction, n, utils)
-    elif isinstance(run_vis, RunVis):
-        raise ValueError(f'run_vis {run_vis} given as instance rather than (uninitiated) class')
-    else:
+    elif not isinstance(run_vis, RunVis):
         raise ValueError(f'run_vis {run_vis} not understood')
 
     anim = animation.FuncAnimation(fig,
@@ -439,7 +436,7 @@ def visualise(scenario: TwoDimScenario,
                                    init_func=run_vis.anim_init,
                                    interval=ms_per_sample / run_vis.frames_per_sample,
                                    repeat=False,
-                                   blit=False)
+                                   **kwargs)
 
     if return_sample:
         out_sample = run_vis.corrected_samples
