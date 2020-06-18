@@ -411,7 +411,6 @@ def visualise(scenario: TwoDimScenario,
               potential: bool = False,
               return_sample: bool = False,
               utils: RunVisUtils = RunVisUtils(),
-              blit: bool = True,
               **kwargs):
     sampler, correction = startup_mcmc(scenario, sampler, random_key, correction, **kwargs)
 
@@ -440,7 +439,7 @@ def visualise(scenario: TwoDimScenario,
                                    init_func=run_vis.anim_init,
                                    interval=ms_per_sample / run_vis.frames_per_sample,
                                    repeat=False,
-                                   blit=blit)
+                                   blit=False)
 
     if return_sample:
         out_sample = run_vis.corrected_samples
