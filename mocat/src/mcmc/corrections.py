@@ -5,7 +5,8 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Tuple
+from typing import Tuple, Union, Type
+from inspect import isclass
 
 from jax import random, vmap, numpy as np
 from jax.lax import cond
@@ -75,7 +76,6 @@ def update_potential(scenario: Scenario,
 
 
 class Metropolis(Correction):
-
     _update_potential = None
 
     def startup(self,
@@ -117,19 +117,23 @@ class Metropolis(Correction):
         return new_state, new_extra
 
 
-class RMMetropolis(Metropolis):
+class RMMetropolis(Correction):
 
     def __init__(self,
+                 super_correction: Union[Correction, Type[Correction]] = Metropolis(),
                  adapt_cut_off: int = np.inf,
                  rm_stepsize_scale: float = 1.,
                  rm_stepsize_neg_exponent: float = 0.75,
                  log_update: bool = True):
         super().__init__()
+        self.super_correction = super_correction() if isclass(super_correction) else super_correction
+        self.super_correction.__init__()
         self.adapt_cut_off = adapt_cut_off
         self.rm_stepsize_scale = rm_stepsize_scale
         self.rm_stepsize_neg_exponent = rm_stepsize_neg_exponent
         self.log_update = log_update
         self._param_update = self.log_robbins_monro_update if self.log_update else self.robbins_monro_update
+        self.tuning = None
 
     def startup(self,
                 scenario: Scenario,
@@ -158,9 +162,9 @@ class RMMetropolis(Metropolis):
                 reject_extra: CDict,
                 proposed_state: CDict,
                 proposed_extra: CDict) -> Tuple[CDict, CDict]:
-        corrected_state, corrected_extra = super().correct(scenario, sampler,
-                                                           reject_state, reject_extra,
-                                                           proposed_state, proposed_extra)
+        corrected_state, corrected_extra = self.super_correction.correct(scenario, sampler,
+                                                                         reject_state, reject_extra,
+                                                                         proposed_state, proposed_extra)
 
         adapted_state, adapted_extra = cond(corrected_extra.iter <= self.adapt_cut_off,
                                             lambda carry: self.adapt(*carry),

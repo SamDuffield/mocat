@@ -77,19 +77,7 @@ class CDict:
         return cls(**dict(zip(keys, xs)))
 
     def __getitem__(self,
-                    item: Union[int, slice, np.ndarray]) -> 'CDict':
-        if isinstance(item, int):
-            return self.__get_int(item)
-        else:
-            return self.__get_general(item)
-
-    @partial(jit, static_argnums=(0,))
-    def __get_int(self,
-                  int_item: int) -> 'CDict':
-        return self.__get_general(int_item)
-
-    def __get_general(self,
-                      item: Union[str, int, slice, np.ndarray]) -> 'CDict':
+                    item: Union[str, int, slice, np.ndarray]) -> 'CDict':
         if isinstance(item, str):
             return self.__dict__[item]
 
