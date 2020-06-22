@@ -8,6 +8,8 @@ from mocat import kernels
 from mocat import scenarios
 from mocat import twodim
 
+from mocat.version import __version__
+
 from mocat.src.core import Scenario
 from mocat.src.core import CDict
 from mocat.src.core import Sampler

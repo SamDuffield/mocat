@@ -147,7 +147,7 @@ class RMMetropolis(Correction):
         setattr(sampler.initial_state, sampler.tuning.parameter, getattr(sampler.initial_extra.parameters,
                                                                          sampler.tuning.parameter))
 
-        super().startup(scenario, sampler)
+        self.super_correction.startup(scenario, sampler)
 
         sampler.tuning.monotonicity = 1 if sampler.tuning.monotonicity in (1, 'increasing') else -1
 
