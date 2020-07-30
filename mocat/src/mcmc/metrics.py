@@ -175,7 +175,8 @@ def squared_jumping_distance(sample: Union[np.ndarray, CDict],
 
 def ksd(sample: CDict,
         kernel: Kernel,
-        weighted: bool = True) -> float:
+        weighted: bool = True,
+        **kernel_params) -> float:
 
     xs = sample.value
     grad_potentials = sample.grad_potential
@@ -191,10 +192,10 @@ def ksd(sample: CDict,
         weights = np.ones(n) / n
 
     def k_0_inds(x_i, y_i):
-        kern_diag_grad_xy_mat = np.sum(kernel.diag_grad_xy(xs[x_i], xs[y_i]))
-        grad_kx_grad_py_mat = np.dot(kernel.grad_x(xs[x_i], xs[y_i]), grad_potentials[y_i])
-        grad_ky_grad_px_mat = np.dot(grad_potentials[x_i], kernel.grad_y(xs[x_i], xs[y_i]))
-        kern_grad_pxy = kernel(xs[x_i], xs[y_i]) * np.dot(grad_potentials[x_i], grad_potentials[y_i])
+        kern_diag_grad_xy_mat = np.sum(kernel.diag_grad_xy(xs[x_i], xs[y_i], **kernel_params))
+        grad_kx_grad_py_mat = np.dot(kernel.grad_x(xs[x_i], xs[y_i], **kernel_params), grad_potentials[y_i])
+        grad_ky_grad_px_mat = np.dot(grad_potentials[x_i], kernel.grad_y(xs[x_i], xs[y_i], **kernel_params))
+        kern_grad_pxy = kernel(xs[x_i], xs[y_i], **kernel_params) * np.dot(grad_potentials[x_i], grad_potentials[y_i])
 
         return (kern_diag_grad_xy_mat + grad_kx_grad_py_mat + grad_ky_grad_px_mat + kern_grad_pxy) \
                * weights[x_i] * weights[y_i]
