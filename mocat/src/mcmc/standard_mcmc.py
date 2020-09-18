@@ -30,9 +30,9 @@ class RandomWalk(MCMCSampler):
         self.tuning.target = 0.234
 
     def proposal(self,
-                        scenario: Scenario,
-                        reject_state: CDict,
-                        reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 scenario: Scenario,
+                 reject_state: CDict,
+                 reject_extra: CDict) -> Tuple[CDict, CDict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -68,14 +68,17 @@ class Overdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        super().startup(scenario, random_key)
-        self.initial_state.grad_potential = scenario.grad_potential(self.initial_state.value)
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
+        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+        return initial_state, initial_extra
 
     def proposal(self,
-                        scenario: Scenario,
-                        reject_state: CDict,
-                        reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 scenario: Scenario,
+                 reject_state: CDict,
+                 reject_extra: CDict) -> Tuple[CDict, CDict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -123,16 +126,19 @@ class HMC(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        super().startup(scenario, random_key)
-        self.initial_state.grad_potential = scenario.grad_potential(self.initial_state.value)
-        if not hasattr(self.initial_state, 'momenta') or self.initial_state.momenta.shape[-1] != scenario.dim:
-            self.initial_state.momenta = np.zeros(scenario.dim)
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
+        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+        if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
+            initial_state.momenta = np.zeros(scenario.dim)
+        return initial_state, initial_extra
 
     def proposal(self,
-                        scenario: Scenario,
-                        reject_state: CDict,
-                        reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 scenario: Scenario,
+                 reject_state: CDict,
+                 reject_extra: CDict) -> Tuple[CDict, CDict]:
         d = scenario.dim
 
         stepsize = reject_extra.parameters.stepsize
@@ -181,11 +187,14 @@ class Underdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        super().startup(scenario, random_key)
-        self.initial_state.grad_potential = scenario.grad_potential(self.initial_state.value)
-        if not hasattr(self.initial_state, 'momenta') or self.initial_state.momenta.shape[-1] != scenario.dim:
-            self.initial_state.momenta = np.zeros(scenario.dim)
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
+        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+        if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
+            initial_state.momenta = np.zeros(scenario.dim)
+        return initial_state, initial_extra
 
     def always(self,
                scenario: Scenario,
@@ -206,12 +215,11 @@ class Underdamped(MCMCSampler):
         return reject_state, reject_extra
 
     def proposal(self,
-                        scenario: Scenario,
-                        reject_state: CDict,
-                        reject_extra: CDict) -> Tuple[CDict, CDict]:
-        
+                 scenario: Scenario,
+                 reject_state: CDict,
+                 reject_extra: CDict) -> Tuple[CDict, CDict]:
         stepsize = reject_extra.parameters.stepsize
-        
+
         proposed_state = utils.leapfrog(reject_state,
                                         scenario.grad_potential,
                                         stepsize,
@@ -238,14 +246,17 @@ class TamedOverdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        super().startup(scenario, random_key)
-        self.initial_state.grad_potential = scenario.grad_potential(self.initial_state.value)
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
+        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+        return initial_state, initial_extra
 
     def proposal(self,
-                        scenario: Scenario,
-                        reject_state: CDict,
-                        reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 scenario: Scenario,
+                 reject_state: CDict,
+                 reject_extra: CDict) -> Tuple[CDict, CDict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim

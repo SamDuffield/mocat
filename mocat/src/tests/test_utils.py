@@ -120,5 +120,47 @@ class TestLeapfrog(unittest.TestCase):
         npt.assert_array_equal(all_leapfrog_momenta[-1], np.array([0.9075344, 0.8597696]))
 
 
+class TestStackedWhile(unittest.TestCase):
+
+    def test_trival(self):
+
+        fin_iter = 10
+        cond_fun = lambda x, _: x < fin_iter
+        body_fun = lambda x, _: (x + 1, None)
+
+        stack = utils.while_loop_stacked(cond_fun, body_fun, (0, None), 100)
+
+        npt.assert_array_equal(stack, np.arange(1, fin_iter + 1))
+
+
+class TestBisect(unittest.TestCase):
+
+    def test_squared_increasing(self):
+        bisect_fun = lambda x: x**2 - 10
+        increasing_init_bounds = np.array([0, 1e2])
+
+        increasing_bound, increasing_evals, increasing_iter = utils.bisect(bisect_fun, increasing_init_bounds)
+
+        npt.assert_(np.any(np.abs(increasing_evals < 1e-3)))
+
+    def test_squared_decreasing(self):
+        bisect_fun = lambda x: x ** 2 - 10
+        decreasing_init_bounds = np.array([-1e1, 0])
+
+        decreasing_bound, decreasing_evals, decreasing_iter = utils.bisect(bisect_fun, decreasing_init_bounds)
+
+        npt.assert_(np.any(np.abs(decreasing_evals < 1e-3)))
+
+
+class TestMedianBandwidth(unittest.TestCase):
+
+    def test_zero_med(self):
+        npt.assert_array_equal(utils.median_kernel_bandwidth(np.zeros(100)), 0.)
+        npt.assert_array_equal(utils.median_kernel_bandwidth(np.ones((100, 2))), 0.)
+
+    def test_seq(self):
+        npt.assert_array_almost_equal(utils.median_kernel_bandwidth(np.arange(100)), 183, decimal=0)
+
+
 if __name__ == '__main__':
     unittest.main()

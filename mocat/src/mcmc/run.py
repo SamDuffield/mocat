@@ -17,11 +17,9 @@ from mocat.src.mcmc.corrections import Correction, Uncorrected
 from mocat.src.mcmc.sampler import MCMCSampler
 
 
-def startup_mcmc(scenario: Scenario,
-                 sampler: MCMCSampler,
-                 random_key: Union[None, np.ndarray],
-                 correction: Union[None, str, Correction, Type[Correction]],
-                 **kwargs) -> Tuple[MCMCSampler, Correction]:
+def check_correction(sampler: MCMCSampler,
+                     correction: Union[None, str, Correction, Type[Correction]],
+                     **kwargs) -> Tuple[MCMCSampler, Correction]:
     # Setup correction
     if correction == 'sampler_default':
         correction = sampler.default_correction
@@ -40,28 +38,39 @@ def startup_mcmc(scenario: Scenario,
         if hasattr(correction, key):
             setattr(correction, key, value)
 
-    # Startup
-    sampler.startup(scenario, random_key)
-    correction.startup(scenario, sampler)
-
-    if None in sampler.parameters.__dict__.values():
-        raise ValueError(f'None found in {sampler.name}.parameters: \n{sampler.parameters}')
-
-    # random_key = None -> use last key from previous run, otherwise set given random_key
-    if random_key is not None:
-        sampler.initial_extra.random_key = random_key
-    sampler.initial_extra.iter = 0
-
     return sampler, correction
 
 
-def mcmc_run_params(sampler, correction):
+def startup_mcmc(scenario: Scenario,
+                 sampler: MCMCSampler,
+                 random_key: Union[None, np.ndarray],
+                 correction: Union[None, str, Correction, Type[Correction]],
+                 initial_state: CDict = None,
+                 initial_extra: CDict = None) -> Tuple[CDict, CDict]:
+    # Startup
+    initial_state, initial_extra = sampler.startup(scenario, initial_state, initial_extra, random_key)
+    initial_state, initial_extra = correction.startup(scenario, sampler, initial_state, initial_extra)
+
+    # random_key = None -> use last key from previous run, otherwise set given random_key
+    if random_key is not None:
+        initial_extra.random_key = random_key
+
+    if not hasattr(initial_extra, 'iter'):
+        initial_extra.iter = 0
+
+    return initial_state, initial_extra
+
+
+def mcmc_run_params(sampler: MCMCSampler,
+                    correction: Correction,
+                    initial_state: CDict,
+                    initial_extra: CDict) -> CDict:
     return CDict(name=sampler.name,
                  parameters=sampler.parameters.copy(),
                  correction=correction.__class__.__name__,
                  tuning=sampler.tuning,
-                 initial_state=sampler.initial_state.copy(),
-                 initial_extra=sampler.initial_extra.copy())
+                 initial_state=initial_state.copy(),
+                 initial_extra=initial_extra.copy())
 
 
 def run_mcmc(scenario: Scenario,
@@ -69,12 +78,18 @@ def run_mcmc(scenario: Scenario,
              n: int,
              random_key: Union[None, np.ndarray],
              correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
+             initial_state: CDict = None,
+             initial_extra: CDict = None,
              name: str = None,
              return_random_key: bool = False,
              **kwargs) -> Union[CDict, Tuple[CDict, np.ndarray]]:
-    sampler, correction = startup_mcmc(scenario, sampler, random_key, correction, **kwargs)
 
-    run_params = mcmc_run_params(sampler, correction)
+    sampler, correction = check_correction(sampler, correction, **kwargs)
+    initial_state, initial_extra = startup_mcmc(scenario, sampler, random_key, correction, initial_state, initial_extra)
+    run_params = mcmc_run_params(sampler, correction, initial_state, initial_extra)
+
+    if None in sampler.parameters.__dict__.values():
+        raise ValueError(f'None found in {sampler.name}.parameters: \n{sampler.parameters}')
 
     @jit
     def markov_kernel(previous_carry: Tuple[CDict, CDict],
@@ -101,21 +116,16 @@ def run_mcmc(scenario: Scenario,
     start = time()
 
     final_carry, chain = scan(markov_kernel,
-                              (sampler.initial_state, sampler.initial_extra),
+                              (initial_state, initial_extra),
                               None,
                               length=n)
 
+    chain.value.block_until_ready()
     end = time()
 
     sampler.parameters = final_carry[1].parameters
 
     chain.run_params = run_params
-
-    if sampler.update_initial_state:
-        sampler.initial_state = final_carry[0]
-
-    if sampler.update_initial_extra:
-        sampler.initial_extra = final_carry[1]
 
     chain.time = end - start
 

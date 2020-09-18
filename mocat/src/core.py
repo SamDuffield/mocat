@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: core.py
-# Description: mocat primitives a Scenario, CDict and Sampler.
+# Description: mocat primitives Scenario, CDict and Sampler.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -21,7 +21,10 @@ class Scenario:
     name = None
     dim = None
 
-    def __init__(self, **kwargs):
+    def __init__(self, name=None, **kwargs):
+        if name is not None:
+            self.name = name
+
         for key, value in kwargs.items():
             if key in self.__dict__.keys():
                 self.__dict__[key] = value
@@ -42,9 +45,6 @@ class Scenario:
 
     def __repr__(self):
         return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"
-
-    def copy(self) -> 'Scenario':
-        return copy.deepcopy(self)
 
     def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
         raise NotImplementedError(f'{self.name} potential not initiated')
@@ -90,6 +90,8 @@ class CDict:
     def __add__(self,
                 other: 'CDict') -> 'CDict':
         out_cdict = self.copy()
+        if other is None:
+            return out_cdict
         for key, attr in out_cdict.__dict__.items():
             if isinstance(attr, np.ndarray) and hasattr(other, key):
                 attr_atl = attr

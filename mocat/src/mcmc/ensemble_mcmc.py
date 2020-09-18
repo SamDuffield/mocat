@@ -12,7 +12,7 @@ from jax import random, vmap
 from jax.lax import cond
 from jax.ops import index_update
 
-from mocat.src.mcmc.sampler import MCMCSampler, default_initial_extra
+from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src import utils
 from mocat.src.core import Scenario, CDict
 from mocat.src.mcmc.corrections import Metropolis
@@ -37,16 +37,15 @@ class EnsembleRWMH(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        if self.initial_state is None \
-                or not hasattr(self.initial_state, 'value') \
-                or self.initial_state.value.shape[-1] != scenario.dim \
-                or self.initial_state.value.shape[1] != self.parameters.n_ensemble:
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        _, initial_extra = super().startup(scenario, False, initial_extra, random_key)
+        if initial_state is None:
             random_key, sub_key = random.split(random_key)
-
             x0 = random.normal(sub_key, shape=(self.parameters.n_ensemble, scenario.dim))
-            self.initial_state = CDict(value=x0)
-        default_initial_extra(self, random_key)
+            initial_state = CDict(value=x0)
+        return initial_state, initial_extra
 
     def proposal(self,
                  scenario: Scenario,
@@ -62,7 +61,6 @@ class EnsembleRWMH(MCMCSampler):
         stepsize = reject_extra.parameters.stepsize
         identity_scaling = reject_extra.parameters.identity_scaling
         samp_cov_scaling = reject_extra.parameters.samp_cov_scaling
-
 
         leave_one_out_ensemble = np.where(np.expand_dims(np.arange(n_ensemble - 1), 1) < ensemble_index,
                                           ensemble[:-1],
@@ -108,18 +106,17 @@ class EnsembleOverdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        if self.initial_state is None \
-                or not hasattr(self.initial_state, 'value') \
-                or self.initial_state.value.shape[-1] != scenario.dim \
-                or self.initial_state.value.shape[1] != self.parameters.n_ensemble:
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        _, initial_extra = super().startup(scenario, False, initial_extra, random_key)
+        if initial_state is None:
             random_key, sub_key = random.split(random_key)
-
             x0 = random.normal(sub_key, shape=(self.parameters.n_ensemble, scenario.dim))
-            self.initial_state = CDict(value=x0)
-        self.initial_state.grad_potential = vmap(scenario.grad_potential)(self.initial_state.value)
-        default_initial_extra(self, random_key)
-        self.initial_state, self.initial_extra = self.always(scenario, self.initial_state, self.initial_extra)
+            initial_state = CDict(value=x0)
+        initial_state.grad_potential = vmap(scenario.grad_potential)(initial_state.value)
+        initial_state, initial_extra = self.always(scenario, initial_state, initial_extra)
+        return initial_state, initial_extra
 
     def always(self,
                scenario: Scenario,

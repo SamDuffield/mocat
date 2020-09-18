@@ -89,21 +89,21 @@ class Gaussian(Kernel):
                 x: np.ndarray,
                 y: np.ndarray,
                 bandwidth: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        return (y - x) * self(x, y) / bandwidth ** 2
+        return (y - x) * self._call(x, y, bandwidth=bandwidth) / bandwidth ** 2
 
     @partial(jit, static_argnums=(0,))
     def _grad_y(self,
                 x: np.ndarray,
                 y: np.ndarray,
                 bandwidth: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        return (x - y) * self(x, y) / bandwidth ** 2
+        return (x - y) * self._call(x, y, bandwidth=bandwidth) / bandwidth ** 2
 
     @partial(jit, static_argnums=(0,))
     def _diag_grad_xy(self,
                       x: np.ndarray,
                       y: np.ndarray,
                       bandwidth: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
-        return (bandwidth ** 2 - (x - y) ** 2) * self(x, y) / bandwidth ** 4
+        return (bandwidth ** 2 - (x - y) ** 2) * self._call(x, y, bandwidth=bandwidth) / bandwidth ** 4
 
 
 class IMQ(Kernel):

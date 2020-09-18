@@ -9,7 +9,7 @@ from typing import Union, Tuple
 
 import jax.numpy as np
 from jax import vmap
-import numpy as onp         # For onp.fft.fft(x, n=n) and onp.unique(x, axis=0) (JAX doesn't support as of writing)
+import numpy as onp         # For onp.fft.fft(x, n_samps=n_samps) and onp.unique(x, axis=0) (JAX doesn't support as of writing)
 import matplotlib.pyplot as plt
 
 from mocat.src.core import CDict
@@ -148,7 +148,7 @@ def ess(sample: Union[np.ndarray, CDict],
     # https://dfm.io/posts/autocorr/
     iat = integrated_autocorrelation_time(sample, dim, max_lag_iat, max_lag_eval, ensemble_index)
 
-    n_mult = np.prod(vals.shape[:-1]) if vals.ndim == 3 and ensemble_index is None else len(vals)
+    n_mult = vals.shape[0] * vals.shape[1] if vals.ndim == 3 and ensemble_index is None else len(vals)
 
     return n_mult / iat
 
@@ -200,7 +200,7 @@ def ksd(sample: CDict,
         return (kern_diag_grad_xy_mat + grad_kx_grad_py_mat + grad_ky_grad_px_mat + kern_grad_pxy) \
                * weights[x_i] * weights[y_i]
 
-    return float(np.sqrt((vmap(k_0_inds)(np.arange(n), np.arange(n))).sum()))
+    return float(np.sqrt((vmap(lambda i: vmap(lambda j: k_0_inds(i, j))(np.arange(n)))(np.arange(n))).sum()))
 
 
 @_metric_plot_decorate

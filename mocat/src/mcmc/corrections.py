@@ -21,10 +21,15 @@ class Correction:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
+    def __repr__(self):
+        return f'mocat.Correction.{self.__class__.__name__}'
+
     def startup(self,
                 scenario: Scenario,
-                sampler: MCMCSampler):
-        pass
+                sampler: MCMCSampler,
+                initial_state: CDict,
+                inital_extra: CDict) -> Tuple[CDict, CDict]:
+        return initial_state, inital_extra
 
     def correct(self,
                 scenario: Scenario,
@@ -76,19 +81,25 @@ def update_potential(scenario: Scenario,
 
 
 class Metropolis(Correction):
-    _update_potential = None
+
+    def __init__(self):
+        super().__init__()
+        self._update_potential = None
 
     def startup(self,
                 scenario: Scenario,
-                sampler: MCMCSampler):
-        sampler.initial_state.alpha = 1.
+                sampler: MCMCSampler,
+                initial_state: CDict,
+                initial_extra: CDict) -> Tuple[CDict, CDict]:
+        initial_state.alpha = 1.
 
-        if sampler.initial_state.value.ndim == 2:
-            sampler.initial_state.potential = vmap(scenario.potential)(sampler.initial_state.value)
+        if initial_state.value.ndim == 2:
+            initial_state.potential = vmap(scenario.potential)(initial_state.value)
             self._update_potential = update_ensemble_potential
         else:
-            sampler.initial_state.potential = scenario.potential(sampler.initial_state.value)
+            initial_state.potential = scenario.potential(initial_state.value)
             self._update_potential = update_potential
+        return initial_state, initial_extra
 
     def correct(self,
                 scenario: Scenario,
@@ -137,23 +148,26 @@ class RMMetropolis(Correction):
 
     def startup(self,
                 scenario: Scenario,
-                sampler: MCMCSampler):
+                sampler: MCMCSampler,
+                initial_state: CDict,
+                initial_extra: CDict) -> Tuple[CDict, CDict]:
         # Set tuning parameter (i.e. stepsize) to 2.38^2/d if not initiated and adaptive
         if hasattr(sampler.parameters, sampler.tuning.parameter) \
                 and getattr(sampler.parameters, sampler.tuning.parameter) is None:
             setattr(sampler.parameters, sampler.tuning.parameter, 2.38 ** 2 / scenario.dim)
-            setattr(sampler.initial_extra.parameters, sampler.tuning.parameter, 2.38 ** 2 / scenario.dim)
+            setattr(initial_extra.parameters, sampler.tuning.parameter, 2.38 ** 2 / scenario.dim)
 
-        setattr(sampler.initial_state, sampler.tuning.parameter, getattr(sampler.initial_extra.parameters,
-                                                                         sampler.tuning.parameter))
+        setattr(initial_state, sampler.tuning.parameter, getattr(initial_extra.parameters,
+                                                                 sampler.tuning.parameter))
 
-        self.super_correction.startup(scenario, sampler)
+        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, initial_state, initial_extra)
 
         sampler.tuning.monotonicity = 1 if sampler.tuning.monotonicity in (1, 'increasing') else -1
 
         self.tuning = sampler.tuning
 
         self._param_update = self.log_robbins_monro_update if self.log_update else self.robbins_monro_update
+        return initial_state, initial_extra
 
     def correct(self,
                 scenario: Scenario,

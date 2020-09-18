@@ -15,13 +15,8 @@ from mocat.src.core import Sampler, Scenario, CDict
 class MCMCSampler(Sampler):
     default_correction = None
 
-    update_initial_state = True
-    update_initial_extra = True
-
     def __init__(self,
                  **kwargs):
-        self.initial_state = None
-        self.initial_extra = None
 
         if not hasattr(self, 'parameters'):
             self.parameters = CDict()
@@ -37,9 +32,20 @@ class MCMCSampler(Sampler):
 
     def startup(self,
                 scenario: Scenario,
-                random_key: np.ndarray):
-        default_initial_state(self, scenario)
-        default_initial_extra(self, random_key)
+                initial_state: CDict = None,
+                initial_extra: CDict = None,
+                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+        if initial_state is None:
+            x0 = np.zeros(scenario.dim)
+            initial_state = CDict(value=x0)
+
+        if initial_extra is None:
+            initial_extra = CDict(random_key=random_key,
+                                  iter=0)
+        if hasattr(self, 'parameters'):
+            initial_extra.parameters = self.parameters.copy()
+
+        return initial_state, initial_extra
 
     def always(self,
                scenario: Scenario,

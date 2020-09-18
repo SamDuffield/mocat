@@ -20,7 +20,7 @@ from mocat.src.core import CDict, Sampler
 from mocat.src.scenarios.twodim.vectorise import _generate_plot_grid, TwoDimScenario
 from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src.mcmc.corrections import Correction, Uncorrected, Metropolis
-from mocat.src.mcmc.run import startup_mcmc, mcmc_run_params
+from mocat.src.mcmc.run import startup_mcmc, mcmc_run_params, check_correction
 
 
 class RunVisUtils:
@@ -91,7 +91,7 @@ class RunVisUtils:
         return ax.plot(x_points[:, 0], x_points[:, 1], marker='.', color='black', zorder=2.5, alpha=alpha)
 
     @staticmethod
-    def arrayify(cdict):
+    def arrayify(cdict: CDict) -> CDict:
         out_cdict = cdict.copy()
         for key, value in out_cdict.__dict__.items():
             if isinstance(value, (float, int)):
@@ -100,13 +100,15 @@ class RunVisUtils:
         return out_cdict
 
     @staticmethod
-    def vis_run_mcmc(scenario,
-                     sampler,
-                     n,
-                     correction):
+    def vis_run_mcmc(scenario: TwoDimScenario,
+                     sampler: MCMCSampler,
+                     n: int,
+                     correction: Correction,
+                     initial_state: CDict,
+                     initial_extra: CDict) -> Tuple[CDict, CDict, CDict]:
 
-        initial_state = RunVisUtils.arrayify(sampler.initial_state)
-        initial_extra = RunVisUtils.arrayify(sampler.initial_extra)
+        initial_state = RunVisUtils.arrayify(initial_state)
+        initial_extra = RunVisUtils.arrayify(initial_extra)
 
         @jit
         def markov_kernel(previous_carry: Tuple[CDict, CDict],
@@ -133,7 +135,7 @@ class RunVisUtils:
         # Run Sampler
         start = time()
         final_carry, chain = scan(markov_kernel,
-                                  (sampler.initial_state, sampler.initial_extra),
+                                  (initial_state, initial_extra),
                                   None,
                                   length=n)
         end = time()
@@ -163,6 +165,8 @@ class RunVis:
                  sampler: Union[Sampler, MCMCSampler],
                  correction: Correction,
                  n: int,
+                 initial_state: CDict,
+                 initial_extra: CDict,
                  utils: RunVisUtils = RunVisUtils()):
         self.utils = utils
         self.ax = ax
@@ -171,21 +175,23 @@ class RunVis:
         self.correction = correction
         self.n = n
 
-        self.leapfrog = hasattr(sampler.initial_state, 'momenta') and hasattr(sampler.parameters, 'leapfrog_steps')
-        self.requires_gradient = hasattr(sampler.initial_state, 'grad_potential')
-        self.ensemble = self.sampler.initial_state.value.ndim == 2
+        self.leapfrog = hasattr(initial_state, 'momenta') and hasattr(sampler.parameters, 'leapfrog_steps')
+        self.requires_gradient = hasattr(initial_state, 'grad_potential')
+        self.ensemble = initial_state.value.ndim == 2
 
         if self.leapfrog:
-            self.sampler.initial_state._all_leapfrog_value = np.zeros((self.sampler.parameters.leapfrog_steps + 1,
-                                                                       self.sampler.initial_state.value.shape[-1]))
-            self.sampler.initial_state._all_leapfrog_momenta = np.zeros((2 * self.sampler.parameters.leapfrog_steps + 1,
-                                                                         *self.sampler.initial_state.momenta.shape))
+            initial_state._all_leapfrog_value = np.zeros((self.sampler.parameters.leapfrog_steps + 1,
+                                                          initial_state.value.shape[-1]))
+            initial_state._all_leapfrog_momenta = np.zeros((2 * self.sampler.parameters.leapfrog_steps + 1,
+                                                            *initial_state.momenta.shape))
 
-        self.run_params = mcmc_run_params(sampler, correction)
+        self.run_params = mcmc_run_params(sampler, correction, initial_state, initial_extra)
         self.corrected_samples, self.corrected_extras, self.proposed_samples = self.utils.vis_run_mcmc(self.scenario,
                                                                                                        self.sampler,
                                                                                                        n,
-                                                                                                       self.correction)
+                                                                                                       self.correction,
+                                                                                                       initial_state,
+                                                                                                       initial_extra)
 
         self.samp_xlim = [np.min(self.corrected_samples.value[..., 0]), np.max(self.corrected_samples.value[..., 0])]
         self.samp_ylim = [np.min(self.corrected_samples.value[..., 1]), np.max(self.corrected_samples.value[..., 1])]
@@ -236,7 +242,7 @@ class RunVis:
             self.reject_extra = self.corrected_extras[self.sample_index]
             self.proposed_state = self.proposed_samples[self.sample_index]
             self.corrected_state = self.corrected_samples[self.sample_index]
-            
+
             if self.ensemble:
                 self.full_state_points.set_offsets(np.concatenate(self.corrected_samples.value[:self.sample_index]))
             else:
@@ -256,8 +262,10 @@ class UncorrectedRunVis(RunVis):
                  sampler: MCMCSampler,
                  correction: Correction,
                  n: int,
+                 initial_state: CDict,
+                 initial_extra: CDict,
                  utils: RunVisUtils = RunVisUtils()):
-        super().__init__(ax, scenario, sampler, correction, n, utils)
+        super().__init__(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
         self.frames_per_sample = 2 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 2
 
         if self.ensemble:
@@ -365,8 +373,10 @@ class MHRunVis(UncorrectedRunVis):
                  sampler: MCMCSampler,
                  correction: Correction,
                  n: int,
+                 initial_state: CDict,
+                 initial_extra: CDict,
                  utils: RunVisUtils = RunVisUtils()):
-        super().__init__(ax, scenario, sampler, correction, n, utils)
+        super().__init__(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
         self.frames_per_sample = 3 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 3
 
     def run_vis(self):
@@ -394,6 +404,8 @@ def visualise(scenario: TwoDimScenario,
               sampler: MCMCSampler,
               random_key: np.ndarray,
               correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
+              initial_state: CDict = None,
+              initial_extra: CDict = None,
               run_vis: Union[RunVis, Type[RunVis]] = None,
               n: int = 100,
               ms_per_sample: float = 1500,
@@ -401,7 +413,9 @@ def visualise(scenario: TwoDimScenario,
               return_sample: bool = False,
               utils: RunVisUtils = RunVisUtils(),
               **kwargs):
-    sampler, correction = startup_mcmc(scenario, sampler, random_key, correction)
+
+    sampler, correction = check_correction(sampler, correction, **kwargs)
+    initial_state, initial_extra = startup_mcmc(scenario, sampler, random_key, correction, initial_state, initial_extra)
 
     utils.plot_scen_potential = potential
 
@@ -410,13 +424,14 @@ def visualise(scenario: TwoDimScenario,
 
     if run_vis is None:
         if isinstance(correction, Uncorrected):
-            run_vis = UncorrectedRunVis(ax, scenario, sampler, correction, n, utils)
-        elif isinstance(correction, Metropolis):
-            run_vis = MHRunVis(ax, scenario, sampler, correction, n, utils)
+            run_vis = UncorrectedRunVis(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
+        elif isinstance(correction, Metropolis)\
+                or (hasattr(correction, 'super_correction') and isinstance(correction.super_correction, Metropolis)):
+            run_vis = MHRunVis(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
         else:
             raise ValueError(f'RunVis not found for correction: {correction}')
     elif isclass(run_vis) and issubclass(run_vis, RunVis):
-        run_vis = run_vis(ax, scenario, sampler, correction, n, utils)
+        run_vis = run_vis(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
     elif not isinstance(run_vis, RunVis):
         raise ValueError(f'run_vis {run_vis} not understood')
 

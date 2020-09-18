@@ -13,18 +13,6 @@ import numpy.testing as npt
 from mocat.src import core
 
 
-class TestScenario(unittest.TestCase):
-
-    scenario = core.Scenario()
-    scenario.test_val = 1.
-
-    def test_copy(self):
-        scenario2 = self.scenario.copy()
-        scenario2.test_val = 10.
-        npt.assert_equal(self.scenario.test_val, 1.)
-        npt.assert_equal(scenario2.test_val, 10.)
-
-
 class TestCDict(unittest.TestCase):
     cdict = core.CDict(test_arr=np.ones((10, 3)),
                        test_float=3.)

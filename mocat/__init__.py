@@ -7,6 +7,8 @@ from mocat import mcmc
 from mocat import kernels
 from mocat import scenarios
 from mocat import twodim
+from mocat import smc_samplers
+from mocat import svgd
 
 from mocat.version import __version__
 
@@ -38,10 +40,10 @@ from mocat.src.mcmc.standard_mcmc import RandomWalk
 from mocat.src.mcmc.standard_mcmc import Overdamped
 from mocat.src.mcmc.standard_mcmc import HMC
 from mocat.src.mcmc.standard_mcmc import Underdamped
-from mocat.src.mcmc.standard_mcmc import TamedOverdamped
 
-from mocat.src.mcmc.ensemble_mcmc import EnsembleRWMH
-from mocat.src.mcmc.ensemble_mcmc import EnsembleOverdamped
+from mocat.src.svgd import run_svgd
+
+from mocat.src.smc_samplers import run_smc_sampler
 
 try:
   del src

@@ -12,6 +12,9 @@ from mocat.src.scenarios.twodim.toy_scenarios import Rastrigin
 from mocat.src.scenarios.twodim.visualise import visualise
 from mocat.src.scenarios.twodim.visualise import RunVis
 from mocat.src.scenarios.twodim.visualise import RunVisUtils
+from mocat.src.scenarios.twodim.visualise import UncorrectedRunVis
+from mocat.src.scenarios.twodim.visualise import MHRunVis
+
 
 
 
