@@ -152,15 +152,5 @@ class TestBisect(unittest.TestCase):
         npt.assert_(np.any(np.abs(decreasing_evals < 1e-3)))
 
 
-class TestMedianBandwidth(unittest.TestCase):
-
-    def test_zero_med(self):
-        npt.assert_array_equal(utils.median_kernel_bandwidth(np.zeros(100)), 0.)
-        npt.assert_array_equal(utils.median_kernel_bandwidth(np.ones((100, 2))), 0.)
-
-    def test_seq(self):
-        npt.assert_array_almost_equal(utils.median_kernel_bandwidth(np.arange(100)), 183, decimal=0)
-
-
 if __name__ == '__main__':
     unittest.main()

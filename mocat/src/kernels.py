@@ -5,9 +5,8 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-import copy
 from typing import Union
-from functools import partial, wraps
+from functools import partial
 
 import jax.numpy as np
 from jax import jit
@@ -18,14 +17,12 @@ from mocat.src.core import CDict
 class Kernel:
 
     def __init__(self, **kwargs):
-        self.parameters = CDict()
+        if not hasattr(self, 'parameters'):
+            self.parameters = CDict()
         self.parameters.__dict__.update(kwargs)
 
     def __repr__(self):
         return f"mocat.kernels.{self.__class__.__name__}"
-
-    def copy(self):
-        return copy.deepcopy(self)
 
     def _call(self,
               x: np.ndarray,
@@ -56,16 +53,28 @@ class Kernel:
         kern_params.update(input_params)
         return kern_params
 
-    def __call__(self, x, y, **kwargs):
+    def __call__(self,
+                 x: np.ndarray,
+                 y: np.ndarray,
+                 **kwargs) -> Union[float, np.ndarray]:
         return self._call(x, y, **self._flex_params(kwargs))
 
-    def grad_x(self, x, y, **kwargs):
+    def grad_x(self,
+               x: np.ndarray,
+               y: np.ndarray,
+               **kwargs) -> Union[float, np.ndarray]:
         return self._grad_x(x, y, **self._flex_params(kwargs))
 
-    def grad_y(self, x, y, **kwargs):
+    def grad_y(self,
+               x: np.ndarray,
+               y: np.ndarray,
+               **kwargs) -> Union[float, np.ndarray]:
         return self._grad_y(x, y, **self._flex_params(kwargs))
 
-    def diag_grad_xy(self, x, y, **kwargs):
+    def diag_grad_xy(self,
+                     x: np.ndarray,
+                     y: np.ndarray,
+                     **kwargs) -> Union[float, np.ndarray]:
         return self._diag_grad_xy(x, y, **self._flex_params(kwargs))
 
 
@@ -104,6 +113,52 @@ class Gaussian(Kernel):
                       y: np.ndarray,
                       bandwidth: Union[float, np.ndarray]) -> Union[float, np.ndarray]:
         return (bandwidth ** 2 - (x - y) ** 2) * self._call(x, y, bandwidth=bandwidth) / bandwidth ** 4
+
+
+class PreconditionedGaussian(Kernel):
+
+    def __init__(self,
+                 bandwidth: float = 1.,
+                 precision: np.ndarray = None):
+        super().__init__()
+        self.parameters.bandwidth = bandwidth
+        self.parameters.precision = precision
+
+    @partial(jit, static_argnums=(0,))
+    def _call(self,
+              x: np.ndarray,
+              y: np.ndarray,
+              bandwidth: float,
+              precision: np.ndarray) -> Union[float, np.ndarray]:
+        diff = (x - y) / bandwidth
+        return np.exp(-0.5 * np.sum(diff.T @ precision @ diff))
+
+    @partial(jit, static_argnums=(0,))
+    def _grad_x(self,
+                x: np.ndarray,
+                y: np.ndarray,
+                bandwidth: float,
+                precision: np.ndarray) -> Union[float, np.ndarray]:
+        return precision @ (y - x) / bandwidth ** 2 * self._call(x, y, bandwidth=bandwidth, precision=precision)
+
+    @partial(jit, static_argnums=(0,))
+    def _grad_y(self,
+                x: np.ndarray,
+                y: np.ndarray,
+                bandwidth: float,
+                precision: np.ndarray) -> Union[float, np.ndarray]:
+        return precision @ (x - y) / bandwidth ** 2 * self._call(x, y, bandwidth=bandwidth, precision=precision)
+
+    @partial(jit, static_argnums=(0,))
+    def _diag_grad_xy(self,
+                      x: np.ndarray,
+                      y: np.ndarray,
+                      bandwidth: float,
+                      precision: np.ndarray) -> Union[float, np.ndarray]:
+        return precision / bandwidth ** 2 @ (1 - precision * ((x - y) / bandwidth) ** 2) \
+               * self._call(x, y,
+                            bandwidth=bandwidth,
+                            precision=precision)
 
 
 class IMQ(Kernel):

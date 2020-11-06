@@ -14,8 +14,8 @@ import numpy.testing as npt
 
 from mocat.src.core import CDict
 from mocat.src.scenarios import toy_scenarios
-from mocat.src.smc import run_smc_sampler
-from mocat.src.svgd import run_svgd, median_kernel_param_update, mean_kernel_param_update
+from mocat.src.smc_samplers import run_smc_sampler
+from mocat.src.svgd import run_svgd, median_bandwidth_update, mean_bandwidth_update
 from mocat.src.mcmc.standard_mcmc import RandomWalk, Overdamped
 
 
@@ -48,19 +48,19 @@ class TestSVGD(TestCorrelatedGaussian):
     n_iter = int(1e3)
 
     def test_fixed_kernel_params(self):
-        sample = run_svgd(self.scenario, self.n, self.n_iter, stepsize=0.8)
-        self._test_mean(sample)
-        self._test_cov(sample)
+        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=0.8)
+        self._test_mean(sample[-1])
+        self._test_cov(sample[-1])
 
     def test_median_update(self):
-        sample = run_svgd(self.scenario, self.n, self.n_iter, stepsize=1.0,
-                          kernel_param_update=median_kernel_param_update)
-        self._test_mean(sample)
-        self._test_cov(sample)
+        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=1.0,
+                          kernel_param_update=median_bandwidth_update)
+        self._test_mean(sample[-1])
+        self._test_cov(sample[-1])
 
     def test_mean_update(self):
-        sample = run_svgd(self.scenario, self.n, self.n_iter, stepsize=1.3,
-                          kernel_param_update=mean_kernel_param_update)
+        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=1.3,
+                          kernel_param_update=mean_bandwidth_update)
         self._test_mean(sample)
         self._test_cov(sample)
 

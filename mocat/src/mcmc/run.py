@@ -51,7 +51,7 @@ def startup_mcmc(scenario: Scenario,
     initial_state, initial_extra = sampler.startup(scenario, initial_state, initial_extra, random_key)
     initial_state, initial_extra = correction.startup(scenario, sampler, initial_state, initial_extra)
 
-    # random_key = None -> use last key from previous run, otherwise set given random_key
+    # random_keys = None -> use last key from previous run, otherwise set given random_keys
     if random_key is not None:
         initial_extra.random_key = random_key
 

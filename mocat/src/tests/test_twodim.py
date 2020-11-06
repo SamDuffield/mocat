@@ -142,10 +142,10 @@ class TestGaussianMixture(unittest.TestCase):
         npt.assert_equal(self.scenario.sqrt_precs.shape[-1], 2)
 
     # def test_vectorise(self):
-    #     self.scenario._vectorise()
-    #     npt.assert_array_almost_equal(self.scenario.vec_potential(np.arange(6).reshape((3, 2))),
+    #     self.ssm_scenario._vectorise()
+    #     npt.assert_array_almost_equal(self.ssm_scenario.vec_potential(np.arange(6).reshape((3, 2))),
     #                                   np.array([5.0128746, 3.7238297, 9.724172]))
-    #     npt.assert_array_almost_equal(self.scenario.vec_potential(np.arange(8).reshape((2, 2, 2))),
+    #     npt.assert_array_almost_equal(self.ssm_scenario.vec_potential(np.arange(8).reshape((2, 2, 2))),
     #                                   np.array([[5.0128746, 3.7238297],
     #                                             [9.724172, 23.72417]]))
 

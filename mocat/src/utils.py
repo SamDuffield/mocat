@@ -1,6 +1,6 @@
 ########################################################################################################################
-# Module: utils.py
-# Description: Some useful functions including Gaussian potential evaluations and leapfrog integrator.
+# Module: _utils.py
+# Description: Some useful functions including TemporalGaussian potential evaluations and leapfrog integrator.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -11,7 +11,7 @@ from functools import partial
 from decorator import decorator
 import jax.numpy as np
 from jax.lax import scan, while_loop, cond
-from jax import jit, vmap
+from jax import jit
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
@@ -34,6 +34,13 @@ def _vectorised_gaussian_potential(x: np.ndarray,
 
 
 @jit
+def _vectorised_gaussian_potential_diag(x: np.ndarray,
+                                        mean: Union[np.ndarray, float],
+                                        sqrt_prec_diag: np.ndarray) -> Union[np.ndarray, float]:
+    return 0.5 * np.sum(np.square((x - mean) * sqrt_prec_diag), axis=-1)
+
+
+@jit
 def _vectorised_gaussian_potential_identcov(x: np.ndarray,
                                             mean: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
     return 0.5 * np.sum(np.square(x - mean), axis=-1)
@@ -48,6 +55,14 @@ def _mv_gaussian_potential(x: np.ndarray,
 
 
 @jit
+def _mv_gaussian_potential_diag(x: np.ndarray,
+                                mean: Union[np.ndarray, float],
+                                prec_diag: np.ndarray) -> Union[np.ndarray, float]:
+    diff = x - mean
+    return 0.5 * np.sum(np.square(diff) * prec_diag, axis=-1)
+
+
+@jit
 def _mv_gaussian_potential_identcov(x: np.ndarray,
                                     mean: Union[np.ndarray, float]) -> Union[np.ndarray, float]:
     diff = x - mean
@@ -58,9 +73,11 @@ def gaussian_potential(x: np.ndarray,
                        mean: Union[np.ndarray, float] = 0.,
                        prec: np.ndarray = None,
                        sqrt_prec: np.ndarray = None) -> np.ndarray:
-    if x.ndim == 1:
+    if x.ndim == 1 and sqrt_prec is None:
         if prec is None:
             return _mv_gaussian_potential_identcov(x, mean)
+        elif prec.ndim == 1:
+            return _mv_gaussian_potential_diag(x, mean, prec)
         else:
             return _mv_gaussian_potential(x, mean, prec)
     else:
@@ -69,6 +86,8 @@ def gaussian_potential(x: np.ndarray,
 
         if sqrt_prec is None:
             return _vectorised_gaussian_potential_identcov(x, mean)
+        elif sqrt_prec.ndim < 2:
+            return _vectorised_gaussian_potential_diag(x, mean, sqrt_prec)
         else:
             return _vectorised_gaussian_potential(x, mean, sqrt_prec)
 
@@ -215,4 +234,3 @@ def bisect(fun: Callable,
                                                  (bounds, evals, 0))
 
     return fin_bounds, fin_evals, fin_iter
-

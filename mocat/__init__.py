@@ -9,6 +9,7 @@ from mocat import scenarios
 from mocat import twodim
 from mocat import smc_samplers
 from mocat import svgd
+from mocat import ssm
 
 from mocat.version import __version__
 

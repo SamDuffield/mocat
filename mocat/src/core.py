@@ -18,15 +18,17 @@ from jax.util import unzip2
 
 
 class Scenario:
-    name = None
-    dim = None
+    name: str = None
+    dim: int = None
 
-    def __init__(self, name=None, **kwargs):
+    def __init__(self,
+                 name: str = None,
+                 **kwargs):
         if name is not None:
             self.name = name
 
         for key, value in kwargs.items():
-            if key in self.__dict__.keys():
+            if hasattr(self, key):
                 self.__dict__[key] = value
 
         if self.dim == 1:
@@ -39,9 +41,8 @@ class Scenario:
 
             self.potential = potential
 
-        self.potential = jit(self.potential, static_argnums=(0,))
-        self.dens = jit(self.dens, static_argnums=(0,))
-        self.grad_potential = jit(grad(self.potential), static_argnums=(0,))
+        if not hasattr(self, 'grad_potential'):
+            self.grad_potential = grad(self.potential)
 
     def __repr__(self):
         return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"
@@ -101,6 +102,10 @@ class CDict:
         if hasattr(self, 'time') and hasattr(other, 'time'):
             out_cdict.time = self.time + other.time
         return out_cdict
+
+    @property
+    def is_empty(self):
+        return self.__dict__ == {}
 
     def keys(self):
         return self.__dict__.keys()

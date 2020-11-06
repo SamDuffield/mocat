@@ -14,6 +14,7 @@ from jax.ops import index_update
 
 from mocat.src.core import CDict, Scenario
 from mocat.src.mcmc.sampler import MCMCSampler
+from mocat.src.abc.abc import ABCSampler
 
 
 class Correction:
@@ -64,6 +65,13 @@ class Uncorrected(Correction):
         return proposed_state, proposed_extra
 
 
+def update_prior_potential(scenario: Scenario,
+                           state: CDict,
+                           extra: CDict) -> CDict:
+    state.prior_potential = scenario.prior_potential(state.value)
+    return state
+
+
 def update_ensemble_potential(scenario: Scenario,
                               state: CDict,
                               extra: CDict) -> CDict:
@@ -93,7 +101,10 @@ class Metropolis(Correction):
                 initial_extra: CDict) -> Tuple[CDict, CDict]:
         initial_state.alpha = 1.
 
-        if initial_state.value.ndim == 2:
+        if isinstance(sampler, ABCSampler):
+            initial_state.prior_potential = scenario.prior_potential(initial_state.value)
+            self._update_potential = update_prior_potential
+        elif initial_state.value.ndim == 2:
             initial_state.potential = vmap(scenario.potential)(initial_state.value)
             self._update_potential = update_ensemble_potential
         else:

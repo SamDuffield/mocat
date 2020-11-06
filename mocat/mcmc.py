@@ -1,8 +1,6 @@
 
 
 from mocat.src.mcmc.sampler import MCMCSampler
-from mocat.src.mcmc.sampler import default_initial_state
-from mocat.src.mcmc.sampler import default_initial_extra
 from mocat.src.mcmc.sampler import mh_acceptance_probability
 from mocat.src.mcmc.run import run_mcmc
 

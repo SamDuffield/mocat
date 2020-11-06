@@ -14,7 +14,7 @@ from mocat.src.core import Scenario
 
 
 class Gaussian(Scenario):
-    name = "Gaussian"
+    name = "TemporalGaussian"
 
     def __init__(self,
                  dim: int = 1,
@@ -42,7 +42,7 @@ class Gaussian(Scenario):
 
 
 class GaussianMixture(Scenario):
-    name = "Gaussian Mixture"
+    name = "TemporalGaussian Mixture"
 
     def __init__(self,
                  means: np.ndarray,

@@ -21,7 +21,7 @@ from mocat.src.mcmc.corrections import Metropolis
 # Ensemble Random Walk with sample covariance preconditioner
 class EnsembleRWMH(MCMCSampler):
     name = 'Ensemble Random Walk'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,
@@ -90,7 +90,7 @@ class EnsembleRWMH(MCMCSampler):
 # Ensemble Overdamped Langevin with sample covariance preconditioner
 class EnsembleOverdamped(MCMCSampler):
     name = 'Ensemble Overdamped'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,

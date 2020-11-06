@@ -58,8 +58,6 @@ class Tempered(Scheduler):
                                                            * initial_grad_potential_func(x) \
                                                            + self.scheduled_scenario.schedule_param \
                                                            * scenario.grad_potential(x)
-        self.scheduled_scenario.potential = jit(self.scheduled_scenario.potential)
-        self.scheduled_scenario.grad_potential = jit(self.scheduled_scenario.grad_potential)
 
     @staticmethod
     def log_weight_function(previous_schedule_param: float,

@@ -170,7 +170,7 @@ class RunVis:
                  utils: RunVisUtils = RunVisUtils()):
         self.utils = utils
         self.ax = ax
-        self.scenario = scenario.copy()
+        self.scenario = scenario
         self.sampler = sampler
         self.correction = correction
         self.n = n

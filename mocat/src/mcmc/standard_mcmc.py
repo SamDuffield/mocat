@@ -21,7 +21,7 @@ from mocat.src.mcmc.corrections import Metropolis
 # Identity pre-conditioner
 class RandomWalk(MCMCSampler):
     name = 'Random Walk'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None):
@@ -58,7 +58,7 @@ class RandomWalk(MCMCSampler):
 # Identity pre-conditioner
 class Overdamped(MCMCSampler):
     name = 'Overdamped'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None):
@@ -114,7 +114,7 @@ class Overdamped(MCMCSampler):
 # Identity pre-conditioner/mass matrix
 class HMC(MCMCSampler):
     name = 'HMC'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,
@@ -173,7 +173,7 @@ class HMC(MCMCSampler):
 # Identity pre-conditioner/mass matrix
 class Underdamped(MCMCSampler):
     name = 'Underdamped'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,
@@ -235,7 +235,7 @@ class Underdamped(MCMCSampler):
 # Identity pre-conditioner
 class TamedOverdamped(MCMCSampler):
     name = 'Tamed Overdamped'
-    default_correction = Metropolis()
+    default_correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None):

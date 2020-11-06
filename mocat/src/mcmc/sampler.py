@@ -72,24 +72,6 @@ class MCMCSampler(Sampler):
         raise AttributeError(f'{self.__class__.__name__} acceptance_probability not initiated')
 
 
-def default_initial_state(sampler: MCMCSampler,
-                          scenario: Scenario):
-    if sampler.initial_state is None \
-            or not hasattr(sampler.initial_state, 'value') \
-            or sampler.initial_state.value.shape[-1] != scenario.dim:
-        x0 = np.zeros(scenario.dim)
-        sampler.initial_state = CDict(value=x0)
-
-
-def default_initial_extra(sampler: MCMCSampler,
-                          random_key: np.ndarray):
-    if sampler.initial_extra is None:
-        sampler.initial_extra = CDict(random_key=random_key,
-                                      iter=0)
-    if hasattr(sampler, 'parameters'):
-        sampler.initial_extra.parameters = sampler.parameters
-
-
 def mh_acceptance_probability(sampler: MCMCSampler,
                               scenario: Scenario,
                               reject_state: CDict, reject_extra: CDict,

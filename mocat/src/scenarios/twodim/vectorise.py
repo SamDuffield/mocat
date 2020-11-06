@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: twodim/vectorise.py
-# Description: Two dimensional scenario class - vectorises potentials (that aren't already)
+# Description: Two dimensional ssm_scenario class - vectorises potentials (that aren't already)
 #              and automatically finds limits for plotting.
 #
 # Web: https://github.com/SamDuffield/mocat

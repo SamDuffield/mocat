@@ -6,19 +6,18 @@
 ########################################################################################################################
 
 from time import time
-from typing import Tuple, Callable
-from functools import partial
+from typing import Tuple, Callable, Union
 
 from jax import numpy as np, random, vmap
 from jax.lax import scan
+from jax.experimental.optimizers import adagrad, OptimizerState
 
 from mocat.src.core import Scenario, CDict
 from mocat.src.kernels import Kernel, Gaussian
 
 
-def svgd_update(previous_state: CDict,
-                kernel: Kernel) -> CDict:
-    new_state = previous_state.copy()
+def svgd_phi_hat(previous_state: CDict,
+                 kernel: Kernel) -> CDict:
     n = previous_state.value.shape[0]
 
     def phi_hat_func(x_i):
@@ -29,77 +28,52 @@ def svgd_update(previous_state: CDict,
                                                  **previous_state.kernel_params))(np.arange(n)).mean(axis=0)
 
     phi_hat = vmap(phi_hat_func)(np.arange(n))
-    new_state.value = new_state.value + new_state.stepsize * phi_hat
-    return new_state
+    return phi_hat
 
 
-def median_kernel_param_update(state: CDict) -> CDict:
+def median_bandwidth_update(state: CDict) -> CDict:
     # Note jax.numpy.median scales much worse than numpy.median,
-    # so this method is not currently recommended
+    # thus this method is not currently recommended
     out_params = state.kernel_params
-    dist_mat = vmap(lambda x: vmap(lambda y: np.sum(np.square(x-y)))(state.value))(state.value)**0.5
-    out_params.bandwidth = np.median(dist_mat) ** 2 / np.log(dist_mat.shape[0])
+    dist_mat = vmap(lambda x: vmap(lambda y: np.sum(np.square(x - y)))(state.value))(state.value) ** 0.5
+    out_params.bandwidth = np.median(dist_mat) / np.sqrt(2 * np.log(dist_mat.shape[0]))
     return out_params
 
 
-def mean_kernel_param_update(state: CDict) -> CDict:
+def mean_bandwidth_update(state: CDict) -> CDict:
     out_params = state.kernel_params
-    dist_mat = vmap(lambda x: vmap(lambda y: np.sum(np.square(x-y)))(state.value))(state.value)**0.5
-    out_params.bandwidth = np.mean(dist_mat) ** 2 / np.log(dist_mat.shape[0])
+    dist_mat = vmap(lambda x: vmap(lambda y: np.sum(np.square(x - y)))(state.value))(state.value) ** 0.5
+    out_params.bandwidth = np.mean(dist_mat) / np.sqrt(2 * np.log(dist_mat.shape[0]))
     return out_params
 
 
-def run_svgd(scenario: Scenario,
-             n_samps: int,
-             n_iter: int,
-             stepsize: float = None,
-             kernel: Kernel = None,
-             initial_state: CDict = None,
-             kernel_params: CDict = None,
-             kernel_param_update: Callable = None,
-             stepsize_update: Callable = None,
-             return_int_samples: bool = False,
-             name: str = None) -> CDict:
-    if initial_state is None:
-        initial_state = CDict(value=random.normal(random.PRNGKey(0), (n_samps, scenario.dim)))
+def _run_svgd_all(scenario: Scenario,
+                  n_iter: int,
+                  stepsize: Union[float, Callable],
+                  kernel: Kernel,
+                  initial_state: CDict,
+                  kernel_param_update: Callable,
+                  optimiser: Callable,
+                  **optim_params) -> CDict:
+    opt_init, opt_update, get_params = optimiser(step_size=stepsize, **optim_params)
 
     grad_vec = vmap(scenario.grad_potential)
-
-    if not hasattr(initial_state, 'grad_potential'):
-        initial_state.grad_potential = grad_vec(initial_state.value)
-
-    if kernel is None:
-        kernel = Gaussian()
-
-    if kernel_params is None:
-        kernel_params = kernel.parameters.copy()
-
-    update_kern_params_bool = kernel_param_update is not None
-    if not update_kern_params_bool:
-        kernel_param_update = lambda sample: sample.kernel_params
-
-    if not hasattr(initial_state, 'kernel_params'):
-        initial_state.kernel_params = kernel_params
+    initial_state.grad_potential = grad_vec(initial_state.value)
 
     initial_state.kernel_params = kernel_param_update(initial_state)
 
-    update_stepsize_bool = stepsize_update is not None
-    if not update_stepsize_bool:
-        if stepsize is None:
-            raise ValueError('No stepsize or stepsize_update found for SVGD')
-        stepsize_update = lambda sample: sample.stepsize
-
-    if not hasattr(initial_state, 'stepsize'):
-        initial_state.stepsize = stepsize
-
-    initial_state.stepsize = stepsize_update(initial_state)
-
     initial_state.iter = 0
 
-    def svgd_kernel(previous_state: CDict,
-                    iter_ind: int) -> CDict:
+    def svgd_kernel_all(previous_carry: Tuple[CDict, OptimizerState],
+                        iter_ind: int) -> Tuple[Tuple[CDict, OptimizerState], CDict]:
+        previous_state, previous_opt_state = previous_carry
 
-        new_state = svgd_update(previous_state, kernel)
+        phi_hat = svgd_phi_hat(previous_state, kernel)
+
+        new_opt_state = opt_update(iter_ind, -phi_hat, previous_opt_state)
+
+        new_state = previous_state.copy()
+        new_state.value = get_params(new_opt_state)
 
         new_state.grad_potential = grad_vec(new_state.value)
 
@@ -107,41 +81,105 @@ def run_svgd(scenario: Scenario,
 
         new_state.kernel_params = kernel_param_update(new_state)
 
-        new_state.stepsize = stepsize_update(new_state)
+        return (new_state, new_opt_state), new_state
 
-        return new_state
+    final_carry, chain = scan(svgd_kernel_all,
+                              (initial_state, opt_init(initial_state.value)),
+                              np.arange(1, n_iter + 1))
+    return chain
 
-    if return_int_samples:
-        def svgd_kernel_ris(previous_state: CDict,
-                            iter_ind: int) -> Tuple[CDict, CDict]:
-            new_state = svgd_kernel(previous_state, iter_ind)
-            return new_state, new_state
-    else:
-        def svgd_kernel_ris(previous_state: CDict,
-                            iter_ind: int) -> Tuple[CDict, None]:
-            new_state = svgd_kernel(previous_state, iter_ind)
-            return new_state, None
+
+def _run_svgd_final_only(scenario: Scenario,
+                         n_iter: int,
+                         stepsize: Union[float, Callable],
+                         kernel: Kernel,
+                         initial_state: CDict,
+                         kernel_param_update: Callable,
+                         optimiser: Callable,
+                         **optim_params) -> CDict:
+    opt_init, opt_update, get_params = optimiser(step_size=stepsize, **optim_params)
+
+    grad_vec = vmap(scenario.grad_potential)
+    initial_state.grad_potential = grad_vec(initial_state.value)
+
+    initial_state.kernel_params = kernel_param_update(initial_state)
+
+    initial_state.iter = 0
+
+    def svgd_kernel_final_only(previous_carry: Tuple[CDict, OptimizerState],
+                               iter_ind: int) -> Tuple[Tuple[CDict, OptimizerState], None]:
+        previous_state, previous_opt_state = previous_carry
+
+        phi_hat = svgd_phi_hat(previous_state, kernel)
+
+        new_opt_state = opt_update(iter_ind, -phi_hat, previous_opt_state)
+
+        new_state = previous_state.copy()
+        new_state.value = get_params(new_opt_state)
+
+        new_state.grad_potential = grad_vec(new_state.value)
+
+        new_state.iter = iter_ind
+
+        new_state.kernel_params = kernel_param_update(new_state)
+
+        return (new_state, new_opt_state), None
+
+    final_carry, chain = scan(svgd_kernel_final_only,
+                              (initial_state, opt_init(initial_state.value)),
+                              np.arange(1, n_iter + 1))
+    return final_carry[0]
+
+
+def run_svgd(scenario: Scenario,
+             n_iter: int,
+             stepsize: Union[float, Callable],
+             kernel: Kernel = None,
+             n_samps: int = None,
+             initial_state: CDict = None,
+             kernel_param_update: Callable = None,
+             optimiser: Callable = adagrad,
+             return_int_samples: bool = True,
+             name: str = None,
+             **optim_params) -> CDict:
+    if n_samps is None and initial_state is None:
+        raise ValueError('Either n_samps or initial_state required')
+
+    if n_samps is None:
+        n_samps = len(initial_state.value)
+
+    if initial_state is None:
+        initial_state = CDict(value=random.normal(random.PRNGKey(0), (n_samps, scenario.dim)))
+
+    if kernel is None:
+        kernel = Gaussian()
+
+    update_kern_params_bool = kernel_param_update is not None
+    if not update_kern_params_bool:
+        kernel_param_update = lambda sample: sample.kernel_params
+
+    if not hasattr(initial_state, 'kernel_params'):
+        initial_state.kernel_params = kernel.parameters
+
+    run_func = _run_svgd_all if return_int_samples else _run_svgd_final_only
 
     start = time()
 
-    final_carry, chain = scan(svgd_kernel_ris,
-                              initial_state,
-                              np.arange(1, n_iter + 1))
-
-    output = chain if return_int_samples else final_carry
+    output = run_func(scenario,
+                      n_iter,
+                      stepsize,
+                      kernel,
+                      initial_state,
+                      kernel_param_update,
+                      optimiser,
+                      **optim_params)
 
     end = time()
     output.value.block_until_ready()
     output.time = end - start
 
-    if return_int_samples:
-        del output.iter
-
     if not update_kern_params_bool:
         del output.kernel_params
-
-    if not update_stepsize_bool:
-        del output.stepsize
 
     if name is None:
         name = scenario.name + ": SVGD"
@@ -150,5 +188,7 @@ def run_svgd(scenario: Scenario,
     output.run_params = CDict(name=output.name,
                               kernel=str(kernel),
                               kernel_param_update=update_kern_params_bool,
-                              stepsize_update=update_stepsize_bool)
+                              stepsize=stepsize,
+                              optimiser=str(optimiser),
+                              optim_params=optim_params)
     return output
