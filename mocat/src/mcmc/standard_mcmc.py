@@ -205,7 +205,7 @@ class Underdamped(MCMCSampler):
         stepsize = reject_extra.parameters.stepsize
         friction = reject_extra.parameters.friction
 
-        reject_state.momenta *= -1
+        reject_state.momenta = reject_state.momenta * -1
 
         # Update p - exactly according to solution of OU process
         # Accepted even if leapfrog step is rejected
@@ -224,7 +224,7 @@ class Underdamped(MCMCSampler):
                                         scenario.grad_potential,
                                         stepsize,
                                         self.parameters.leapfrog_steps)[-1]
-        proposed_state.momenta *= -1
+        proposed_state.momenta = proposed_state.momenta * -1
 
         return proposed_state, reject_extra
 
