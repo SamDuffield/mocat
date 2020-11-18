@@ -6,6 +6,7 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
+from typing import Callable
 
 import jax.numpy as np
 import matplotlib.pyplot as plt
@@ -13,7 +14,7 @@ import matplotlib.pyplot as plt
 from mocat.src.core import Scenario
 
 
-def _flex_vectorise(func):
+def _flex_vectorise(func: Callable):
     try:
         # Check if already vectorised
         test_eval = func(np.zeros((3, 2)))
@@ -40,7 +41,10 @@ def _flex_vectorise(func):
         return func
 
 
-def _generate_plot_grid(x_lim, y_lim=None, resolution=100, linspace=False):
+def _generate_plot_grid(x_lim: list,
+                        y_lim: list = None,
+                        resolution: int = 100,
+                        linspace: bool = False):
     if y_lim is None:
         y_lim = x_lim
     x_linspace = np.linspace(x_lim[0], x_lim[1], resolution)
@@ -51,7 +55,8 @@ def _generate_plot_grid(x_lim, y_lim=None, resolution=100, linspace=False):
     return [x_linspace, y_linspace, joint_grid] if linspace else joint_grid
 
 
-def _find_first_non_zero_row(matrix, direction=1):
+def _find_first_non_zero_row(matrix: np.ndim,
+                             direction: int = 1):
     if direction == 1:
         i = 0
         while not any(matrix[i]):
@@ -64,32 +69,40 @@ def _find_first_non_zero_row(matrix, direction=1):
         return i
 
 
-def auto_axes_lims(vec_dens, lim=10):
+def auto_axes_lims(vec_dens: Callable,
+                   xlim: float = 10.,
+                   ylim: float = 10.):
     # Assumes input is a vectorised function that goes to 0 in the tails
 
     # Initial evaluation grid
-    ix, _, grid = _generate_plot_grid([-lim, lim], resolution=100, linspace=True)
+    ix, iy, grid = _generate_plot_grid([-xlim, xlim], [-ylim, ylim], resolution=100, linspace=True)
     # with np.errstate(divide='ignore'):
     #     z = vec_dens(grid)
     z = vec_dens(grid)
 
     # Find mode and find area with probability mass
     max_z = np.max(z)
+
+    if max_z == 0.:
+        return auto_axes_lims(vec_dens, xlim=xlim/1.5, ylim=ylim/1.5)
+
     z_keep = z > max_z / 10
 
     # Find bounds of area with probability mass
-    xlim = np.array([ix[_find_first_non_zero_row(z_keep.T, direction)] for direction in [1, -1]])
-    ylim = np.array([ix[_find_first_non_zero_row(z_keep, direction)] for direction in [1, -1]])
+    xlim_new = np.array([ix[_find_first_non_zero_row(z_keep.T, direction)] for direction in [1, -1]])
+    ylim_new = np.array([iy[_find_first_non_zero_row(z_keep, direction)] for direction in [1, -1]])
 
-    if lim in np.abs(xlim) or lim in np.abs(ylim):
-        return auto_axes_lims(vec_dens, lim=2*lim)
+    if xlim in np.abs(xlim_new) or ylim in np.abs(ylim_new):
+        return auto_axes_lims(vec_dens,
+                              xlim=2*xlim if xlim in np.abs(xlim_new) else xlim,
+                              ylim=2*ylim if ylim in np.abs(ylim_new) else ylim)
 
     # Expand
     expansion = 0.05
-    xlim += (xlim[1] - xlim[0]) * expansion * np.array([-1, 1])
-    ylim += (ylim[1] - ylim[0]) * expansion * np.array([-1, 1])
+    xlim += (xlim_new[1] - xlim_new[0]) * expansion * np.array([-1, 1])
+    ylim += (ylim_new[1] - ylim_new[0]) * expansion * np.array([-1, 1])
 
-    return tuple(xlim), tuple(ylim)
+    return tuple(xlim_new), tuple(ylim_new)
 
 
 def _plot_densf(ax, x, y, z, **kwargs):

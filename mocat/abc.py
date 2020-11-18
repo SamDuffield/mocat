@@ -10,19 +10,3 @@ from mocat.src.abc.standard_abc import VanillaABC
 from mocat.src.abc.standard_abc import RandomWalkABC
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -5,13 +5,13 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Any, Union, Callable, Tuple, TypeVar
+from typing import Any, Union, Callable, Tuple
 from functools import partial
 
 from decorator import decorator
 import jax.numpy as np
 from jax.lax import scan, while_loop, cond
-from jax import jit
+from jax import jit, numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
@@ -234,3 +234,23 @@ def bisect(fun: Callable,
                                                  (bounds, evals, 0))
 
     return fin_bounds, fin_evals, fin_iter
+
+
+def extract_dimension(*args):
+    for a in args:
+        if isinstance(a, np.ndarray):
+            return a.shape[-1]
+    return None
+
+
+def reset_covariance(obj: Any,
+                     key: str,
+                     value: Any):
+    if value.ndim < 2:
+        sqrt_val = np.sqrt(value)
+        setattr(obj, key + '_sqrt', sqrt_val)
+        setattr(obj, key.replace('covariance', 'precision') + '_sqrt', 1 / sqrt_val)
+    else:
+        sqrt_mat = np.linalg.cholesky(value)
+        setattr(obj, key + '_sqrt', sqrt_mat)
+        setattr(obj, key.replace('covariance', 'precision') + '_sqrt', np.linalg.inv(sqrt_mat))

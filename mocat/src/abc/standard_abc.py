@@ -103,7 +103,7 @@ class RandomWalkABC(ABCSampler):
                                reject_state: CDict, reject_extra: CDict,
                                proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
         return np.minimum(1., np.exp(-proposed_state.prior_potential
-                                    + reject_state.prior_potential)
+                                     + reject_state.prior_potential)
                           * (proposed_state.distance < abc_scenario.threshold))
 
     def proposal(self,
@@ -116,6 +116,5 @@ class RandomWalkABC(ABCSampler):
         proposed_extra.random_key, subkey1, subkey2 = random.split(reject_extra.random_key, 3)
         proposed_state.value = reject_state.value + np.sqrt(stepsize) * random.normal(subkey1, (abc_scenario.dim,))
         proposed_extra.simulated_data = abc_scenario.simulate_data(proposed_state.value, subkey2)
-        proposed_extra.simulated_summary_statistic = abc_scenario.summarise_data(proposed_extra.simulated_data)
-        proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_summary_statistic)
+        proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)
         return proposed_state, proposed_extra

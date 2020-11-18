@@ -46,6 +46,8 @@ from mocat.src.svgd import run_svgd
 
 from mocat.src.smc_samplers import run_smc_sampler
 
+from mocat.src.teki import run_tempered_ensemble_kalman_inversion
+
 try:
   del src
 except NameError:

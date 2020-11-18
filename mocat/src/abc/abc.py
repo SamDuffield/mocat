@@ -5,7 +5,6 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from functools import partial
 from typing import Union, Tuple
 
 from jax import numpy as np, random, vmap, jit
@@ -15,6 +14,7 @@ from mocat.src.mcmc.sampler import MCMCSampler
 
 class ABCScenario(Scenario):
 
+    full_data: np.ndarray = None
     data: np.ndarray = None
     summary_statistic: np.ndarray = None
     threshold: float = None
@@ -27,7 +27,7 @@ class ABCScenario(Scenario):
 
         for key, value in kwargs.items():
             if hasattr(self, key):
-                self.__dict__[key] = value
+                setattr(self, key, value)
 
     def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
         raise TypeError(f'{self.name} abc_scenario potential is intractable')
@@ -43,8 +43,8 @@ class ABCScenario(Scenario):
     def simulate_data(self,
                       x: np.ndarray,
                       random_key: np.ndarray) -> np.ndarray:
-        data_keys = random.split(random_key, self.data.shape[0])
-        return vmap(self.likelihood_sample, (None, 0))(x, data_keys)
+        data_keys = random.split(random_key, self.full_data.shape[0])
+        return self.summarise_data(vmap(self.likelihood_sample, (None, 0))(x, data_keys))
 
     def prior_potential(self,
                         x: np.ndarray) -> Union[float, np.ndarray]:
@@ -54,20 +54,8 @@ class ABCScenario(Scenario):
                      random_key: np.ndarray) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.name} prior_sample not initiated')
 
-    def prior_conditional_potential(self,
-                                    i: int,
-                                    x_i: np.ndarray,
-                                    x_minus_i: np.ndarray) -> Union[float, np.ndarray]:
-        raise AttributeError(f'{self.name} prior_conditional_potential not initiated')
-
-    def prior_conditional_sample(self,
-                                 i: int,
-                                 x_minus_i: np.ndarray,
-                                 random_key: np.ndarray) -> Union[float, np.ndarray]:
-        raise AttributeError(f'{self.name} prior_conditional_sample not initiated')
-
     def summarise_data(self,
-                       data: np.ndarray):
+                       data: np.ndarray) -> np.ndarray:
         raise AttributeError(f'{self.name} summarise_data not initiated')
 
     def distance_function(self,
@@ -86,8 +74,8 @@ class ABCSampler(MCMCSampler):
                 initial_state: CDict = None,
                 initial_extra: CDict = None,
                 random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
-        if abc_scenario.summary_statistic is None:
-            abc_scenario.summary_statistic = abc_scenario.summarise_data(abc_scenario.data)
+        if abc_scenario.data is None:
+            abc_scenario.data = abc_scenario.summarise_data(abc_scenario.full_data)
 
         if initial_state is None:
             x0 = np.zeros(abc_scenario.dim)
@@ -102,8 +90,7 @@ class ABCSampler(MCMCSampler):
 
         random_key, subkey = random.split(random_key)
         initial_extra.simulated_data = abc_scenario.simulate_data(initial_state.value, subkey)
-        initial_extra.simulated_summary_statistic = abc_scenario.summarise_data(initial_extra.simulated_data)
-        initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_summary_statistic)
+        initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_data)
         return initial_state, initial_extra
 
     def always(self,

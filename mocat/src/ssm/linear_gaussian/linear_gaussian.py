@@ -9,8 +9,7 @@
 from typing import Union, Any
 
 from jax import numpy as np, random
-from mocat.src.utils import gaussian_potential
-from mocat.src.ssm._utils import reset_covariance, extract_dimension
+from mocat.src.utils import gaussian_potential, extract_dimension, reset_covariance
 from mocat.src.ssm.ssm import StateSpaceModel
 
 
@@ -171,8 +170,8 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
 
         if likelihood_matrix is None:
             likelihood_matrix = np.eye(self.dim)
-
         self.likelihood_matrix = likelihood_matrix
+
         self.dim_obs = self.likelihood_matrix.shape[0]
 
         if likelihood_covariance is None:
