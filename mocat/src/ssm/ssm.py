@@ -28,8 +28,7 @@ class StateSpaceModel:
             self.name = name
 
         for key, value in kwargs.items():
-            if key in self.__dict__.keys():
-                self.__dict__[key] = value
+            setattr(self, key, value)
 
         if not hasattr(self, 'grad_initial_potential'):
             self.grad_initial_potential = jit(grad(self.initial_potential, argnums=0))

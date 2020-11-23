@@ -15,8 +15,7 @@ from mocat.src.mcmc.sampler import MCMCSampler
 class ABCScenario(Scenario):
 
     full_data: np.ndarray = None
-    data: np.ndarray = None
-    summary_statistic: np.ndarray = None
+    summarised_data: np.ndarray = None
     threshold: float = None
 
     def __init__(self,
@@ -40,9 +39,9 @@ class ABCScenario(Scenario):
                           random_key: np.ndarray) -> np.ndarray:
         raise NotImplementedError(f'{self.name} likelihood_sample not initiated')
 
-    def simulate_data(self,
-                      x: np.ndarray,
-                      random_key: np.ndarray) -> np.ndarray:
+    def simulate(self,
+                 x: np.ndarray,
+                 random_key: np.ndarray) -> np.ndarray:
         data_keys = random.split(random_key, self.full_data.shape[0])
         return self.summarise_data(vmap(self.likelihood_sample, (None, 0))(x, data_keys))
 
@@ -59,7 +58,7 @@ class ABCScenario(Scenario):
         raise AttributeError(f'{self.name} summarise_data not initiated')
 
     def distance_function(self,
-                          summary_statistic: np.ndarray) -> Union[float, np.ndarray]:
+                          summarised_simulated_data: np.ndarray) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.name} distance_function not initiated')
 
 
@@ -74,8 +73,8 @@ class ABCSampler(MCMCSampler):
                 initial_state: CDict = None,
                 initial_extra: CDict = None,
                 random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
-        if abc_scenario.data is None:
-            abc_scenario.data = abc_scenario.summarise_data(abc_scenario.full_data)
+        if abc_scenario.summarised_data is None:
+            abc_scenario.summarised_data = abc_scenario.summarise_data(abc_scenario.full_data)
 
         if initial_state is None:
             x0 = np.zeros(abc_scenario.dim)
@@ -89,7 +88,7 @@ class ABCSampler(MCMCSampler):
             initial_extra.parameters = self.parameters.copy()
 
         random_key, subkey = random.split(random_key)
-        initial_extra.simulated_data = abc_scenario.simulate_data(initial_state.value, subkey)
+        initial_extra.simulated_data = abc_scenario.simulate(initial_state.value, subkey)
         initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_data)
         return initial_state, initial_extra
 

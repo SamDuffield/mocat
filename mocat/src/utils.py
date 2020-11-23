@@ -238,7 +238,7 @@ def bisect(fun: Callable,
 
 def extract_dimension(*args):
     for a in args:
-        if isinstance(a, np.ndarray):
+        if isinstance(a, np.ndarray) and a.ndim > 0:
             return a.shape[-1]
     return None
 

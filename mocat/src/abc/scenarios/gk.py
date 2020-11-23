@@ -36,8 +36,8 @@ class GKUniformPrior(ABCScenario):
 
     def prior_potential(self,
                         x: np.ndarray) -> Union[float, np.ndarray]:
-        out = np.where(x > self.prior_mins, 1 / (self.prior_maxs - self.prior_mins), 0.)
-        out = np.where(x < self.prior_maxs, out, 0.)
+        out = np.where(np.all(x > self.prior_mins), 1., np.inf)
+        out = np.where(np.all(x < self.prior_maxs), out, np.inf)
         return out
 
     def prior_sample(self,
@@ -54,10 +54,18 @@ class GKTransformedUniformPrior(ABCScenario):
     prior_mins = 0
     prior_maxs = 10
 
+    def constrain(self,
+                  unconstrained_x: np.ndarray):
+        return self.prior_mins + norm.cdf(unconstrained_x) * (self.prior_maxs - self.prior_mins)
+
+    def unconstrain(self,
+                    constrained_x: np.ndarray):
+        return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
+
     def likelihood_sample(self,
                           x: np.ndarray,
                           random_key: np.ndarray) -> np.ndarray:
-        transformed_x = self.prior_mins + norm.cdf(x) * (self.prior_maxs - self.prior_mins)
+        transformed_x = self.constrain(x)
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)
         expmingz = np.exp(-transformed_x[2] * z)
@@ -98,8 +106,8 @@ class GKOnlyAUniformPrior(ABCScenario):
 
     def prior_potential(self,
                         x: np.ndarray) -> Union[float, np.ndarray]:
-        out = np.where(x > self.prior_mins, 1 / (self.prior_maxs - self.prior_mins), 0.)
-        out = np.where(x < self.prior_maxs, out, 0.)
+        out = np.where(np.all(x > self.prior_mins), 1., np.inf)
+        out = np.where(np.all(x < self.prior_maxs), out, np.inf)
         return out
 
     def prior_sample(self,
@@ -119,10 +127,18 @@ class GKOnlyATransformedUniformPrior(ABCScenario):
     prior_mins = 0
     prior_maxs = 10
 
+    def constrain(self,
+                  unconstrained_x: np.ndarray):
+        return self.prior_mins + norm.cdf(unconstrained_x) * (self.prior_maxs - self.prior_mins)
+
+    def unconstrain(self,
+                    constrained_x: np.ndarray):
+        return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
+
     def likelihood_sample(self,
                           x: np.ndarray,
                           random_key: np.ndarray) -> np.ndarray:
-        transformed_x = self.prior_mins + norm.cdf(x) * (self.prior_maxs - self.prior_mins)
+        transformed_x = self.constrain(x)
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)
         expmingz = np.exp(-self.g * z)

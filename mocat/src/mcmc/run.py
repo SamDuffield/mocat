@@ -27,15 +27,17 @@ def check_correction(sampler: MCMCSampler,
     if correction is None:
         correction = Uncorrected()
     elif isclass(correction) and issubclass(correction, Correction):
-        correction = correction(**kwargs)
+        correction = correction()
     elif not isinstance(correction, Correction):
         raise TypeError(f'Correction must be of type mocat.Correction')
 
     # Update kwargs
-    for key, value in kwargs:
+    for key, value in kwargs.items():
         if hasattr(sampler, key):
             setattr(sampler, key, value)
-        if hasattr(correction, key):
+        elif hasattr(sampler, 'parameters') and hasattr(sampler.parameters, key):
+            setattr(sampler.parameters, key, value)
+        else:
             setattr(correction, key, value)
 
     return sampler, correction

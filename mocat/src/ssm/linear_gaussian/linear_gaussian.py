@@ -78,8 +78,8 @@ class LinearGaussian(StateSpaceModel):
                           random_key: np.ndarray) -> np.ndarray:
         transition_mat = self.get_transition_matrix(t_previous, t_new)
         transition_cov_sqrt = self.get_transition_covariance_sqrt(t_previous, t_new)
-        return x_previous @ transition_mat.T \
-               + random.normal(random_key, shape=x_previous.shape) @ transition_cov_sqrt.T
+        return (x_previous @ transition_mat.T
+                + random.normal(random_key, shape=x_previous.shape) @ transition_cov_sqrt.T).reshape(x_previous.shape)
 
     def get_likelihood_matrix(self,
                               t: float) -> np.ndarray:
@@ -118,8 +118,8 @@ class LinearGaussian(StateSpaceModel):
 
         rand_shape = list(x.shape)
         rand_shape[-1] = likelihood_cov_sqrt.shape[0]
-        return x @ likelihood_mat.T \
-               + random.normal(random_key, shape=rand_shape) @ likelihood_cov_sqrt.T
+        return (x @ likelihood_mat.T
+                + random.normal(random_key, shape=rand_shape) @ likelihood_cov_sqrt.T).reshape(x.shape)
 
 
 class TimeHomogenousLinearGaussian(LinearGaussian):
@@ -146,9 +146,12 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
                  likelihood_covariance: np.ndarray = None,
                  name: str = None,
                  **kwargs):
-        self.dim = extract_dimension(initial_mean, initial_covariance,
-                                     transition_covariance,
-                                     likelihood_matrix, likelihood_covariance)
+        super().__init__(name=name, **kwargs)
+
+        if 'dim' not in kwargs:
+            self.dim = extract_dimension(initial_mean, initial_covariance,
+                                         transition_covariance,
+                                         likelihood_matrix, likelihood_covariance)
         if self.dim is None:
             raise AttributeError(f'Could not find dimension for {self.__class__.__name__}')
 
@@ -177,8 +180,6 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
         if likelihood_covariance is None:
             likelihood_covariance = np.eye(self.dim_obs)
         self.likelihood_covariance = likelihood_covariance
-
-        super().__init__(name=name, **kwargs)
 
     def __setattr__(self,
                     key: str,

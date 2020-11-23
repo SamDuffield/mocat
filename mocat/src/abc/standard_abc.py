@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: abc/standard_abc.py
-# Description: Importance sampling and Markov ABC, accept if simulated data hits ball.
+# Description: Importance sampling and Markov ABC, accept if simulated summarised_data hits ball.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -60,7 +60,7 @@ class ImportanceABC(ABCSampler):
         proposed_extra = reject_extra.copy()
         proposed_extra.random_key, subkey1, subkey2 = random.split(reject_extra.random_key, 3)
         proposed_state.value = self.importance_proposal(abc_scenario, subkey1)
-        proposed_extra.simulated_data = abc_scenario.simulate_data(proposed_state.value, subkey2)
+        proposed_extra.simulated_data = abc_scenario.simulate(proposed_state.value, subkey2)
         proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)
         proposed_state.log_weight = self.log_weight(abc_scenario, proposed_state, proposed_extra)
         return proposed_state, proposed_extra
@@ -115,6 +115,6 @@ class RandomWalkABC(ABCSampler):
         stepsize = reject_extra.parameters.stepsize
         proposed_extra.random_key, subkey1, subkey2 = random.split(reject_extra.random_key, 3)
         proposed_state.value = reject_state.value + np.sqrt(stepsize) * random.normal(subkey1, (abc_scenario.dim,))
-        proposed_extra.simulated_data = abc_scenario.simulate_data(proposed_state.value, subkey2)
+        proposed_extra.simulated_data = abc_scenario.simulate(proposed_state.value, subkey2)
         proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)
         return proposed_state, proposed_extra

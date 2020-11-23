@@ -78,13 +78,14 @@ class LinearGaussian(ABCScenario):
         return gaussian_potential(y, x @ self.likelihood_matrix.T, sqrt_prec=self.likelihood_precision_sqrt)
 
     def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
-        return self.prior_potential(x) + self.likelihood_potential(x, self.data)
+        return self.prior_potential(x) + self.likelihood_potential(x, self.summarised_data)
 
     def summarise_data(self,
                        data: np.ndarray) -> np.ndarray:
         return data
 
-    def simulate_data(self,
-                      x: np.ndarray,
-                      random_key: np.ndarray) -> np.ndarray:
+    def simulate(self,
+                 x: np.ndarray,
+                 random_key: np.ndarray) -> np.ndarray:
         return self.likelihood_sample(x, random_key)
+

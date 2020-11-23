@@ -1,7 +1,4 @@
 
-"""Mocat: Monte Carlo Testbed"""
-
-
 from mocat import utils
 from mocat import mcmc
 from mocat import kernels
@@ -16,6 +13,7 @@ from mocat.version import __version__
 
 from mocat.src.core import Scenario
 from mocat.src.core import CDict
+from mocat.src.core import load_CDict
 from mocat.src.core import Sampler
 
 from mocat.src.mcmc.metrics import acceptance_rate

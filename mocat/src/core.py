@@ -53,10 +53,10 @@ class Scenario:
     def dens(self, x: np.ndarray) -> Union[float, np.ndarray]:
         return np.exp(-self.potential(x))
 
-    def simulate_data(self,
-                      x: np.ndarray,
-                      random_key: np.ndarray) -> np.ndarray:
-        raise AttributeError(f'{self.name} simulate_data not initiated')
+    def simulate(self,
+                 x: np.ndarray,
+                 random_key: np.ndarray) -> np.ndarray:
+        raise AttributeError(f'{self.name} simulate not initiated')
 
 
 @register_pytree_node_class
@@ -66,6 +66,9 @@ class CDict:
 
     def copy(self) -> 'CDict':
         return CDict(**self.__dict__)
+
+    def deepcopy(self) -> 'CDict':
+        return copy.deepcopy(self)
 
     def __repr__(self):
         return f"mocat.CDict({self.__dict__.__repr__()})"
@@ -119,7 +122,7 @@ class CDict:
         return self.__dict__.__iter__()
 
 
-def save_CDict(CDict: CDict,
+def save_CDict(in_cdict: CDict,
                path: Union[str, Path],
                overwrite: bool = False):
     path = Path(path)
@@ -132,7 +135,7 @@ def save_CDict(CDict: CDict,
         else:
             raise RuntimeError(f'File {path} already exists.')
     with open(path, 'wb') as file:
-        pickle.dump(CDict, file)
+        pickle.dump(in_cdict, file)
 
 
 def load_CDict(path: Union[str, Path]) -> CDict:
@@ -172,7 +175,7 @@ class Sampler:
     def __repr__(self):
         return f"mocat.Sampler.{self.__class__.__name__}({self.__dict__.__repr__()})"
 
-    def copy(self) -> 'Sampler':
+    def deepcopy(self) -> 'Sampler':
         return copy.deepcopy(self)
 
     def startup(self,
