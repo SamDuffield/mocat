@@ -5,7 +5,6 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-
 import unittest
 
 import jax.numpy as np
@@ -19,7 +18,8 @@ from mocat.src.ssm.backward import backward_simulation
 class TestSSM(unittest.TestCase):
     ssm_scenario: StateSpaceModel
     len_t: int = 20
-    t: np.ndarray = np.arange(len_t)
+    t: np.ndarray = np.arange(len_t, dtype='float32')
+    max_rejections: int = 2
 
     def _test_simulate(self):
 
@@ -41,7 +41,7 @@ class TestSSM(unittest.TestCase):
         npt.assert_array_less(self.sim_samps.x, np.max(self.pf_samps.value, axis=1))
         npt.assert_array_less(np.min(self.pf_samps.value, axis=1), self.sim_samps.x)
 
-    def _test_ffbsi_full_no_bound(self):
+    def backward_preprocess(self):
         if not hasattr(self, 'sim_samps'):
             self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
         if not hasattr(self, 'pf_samps'):
@@ -51,59 +51,55 @@ class TestSSM(unittest.TestCase):
                                                               self.t,
                                                               random.PRNGKey(0),
                                                               n=int(1e4))
+
+    def backward_postprocess(self):
+        npt.assert_array_less(self.sim_samps.x, np.max(self.backward_samps.value, axis=1))
+        npt.assert_array_less(np.min(self.backward_samps.value, axis=1), self.sim_samps.x)
+        self.assertFalse(hasattr(self.backward_samps, 'log_weights'))
+
+    def _test_ffbsi_full_no_bound(self):
+        self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
                                                   0,
                                                   0.,
                                                   random.PRNGKey(0))
+        self.backward_postprocess()
 
     def _test_ffbsi_rejection_no_bound(self):
-        if not hasattr(self, 'sim_samps'):
-            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
-        if not hasattr(self, 'pf_samps'):
-            self.pf_samps = run_particle_filter_for_marginals(self.ssm_scenario,
-                                                              BootstrapFilter(),
-                                                              self.sim_samps.y,
-                                                              self.t,
-                                                              random.PRNGKey(0),
-                                                              n=int(1e4))
+        self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
-                                                  1000,
+                                                  self.max_rejections,
                                                   0.,
                                                   random.PRNGKey(0))
+        self.backward_postprocess()
 
     def _test_ffbsi_full_bound(self, bound: float):
-        if not hasattr(self, 'sim_samps'):
-            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
-        if not hasattr(self, 'pf_samps'):
-            self.pf_samps = run_particle_filter_for_marginals(self.ssm_scenario,
-                                                              BootstrapFilter(),
-                                                              self.sim_samps.y,
-                                                              self.t,
-                                                              random.PRNGKey(0),
-                                                              n=int(1e4))
+        self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
                                                   0,
                                                   bound,
                                                   random.PRNGKey(0))
+        self.backward_postprocess()
 
     def _test_ffbsi_rejection_bound(self, bound: float):
-        if not hasattr(self, 'sim_samps'):
-            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
-        if not hasattr(self, 'pf_samps'):
-            self.pf_samps = run_particle_filter_for_marginals(self.ssm_scenario,
-                                                              BootstrapFilter(),
-                                                              self.sim_samps.y,
-                                                              self.t,
-                                                              random.PRNGKey(0),
-                                                              n=int(1e4))
+        self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
-                                                  1000,
+                                                  self.max_rejections,
                                                   bound,
                                                   random.PRNGKey(0))
+        self.backward_postprocess()
+
+    def _test_backward_no_bound(self):
+        self._test_ffbsi_full_no_bound()
+        self._test_ffbsi_rejection_no_bound()
+
+    def _test_backward_bound(self, bound: float):
+        self._test_ffbsi_full_bound(bound)
+        self._test_ffbsi_rejection_bound(bound)
 
 
 if __name__ == '__main__':
