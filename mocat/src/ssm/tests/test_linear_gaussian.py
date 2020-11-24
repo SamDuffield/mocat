@@ -8,7 +8,6 @@
 import unittest
 
 import jax.numpy as np
-import numpy.testing as npt
 from mocat.src.ssm.tests.tests_ssm import TestSSM
 from mocat.src.ssm.linear_gaussian.linear_gaussian import TimeHomogenousLinearGaussian
 
