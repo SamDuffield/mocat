@@ -1,5 +1,5 @@
 # mocat
-Create, tune and compare Monte Carlo algorithms in JAX.
+Create, tune and compare Monte Carlo algorithms in JAX. Features include, fully customisable MCMC, SVGD, SMC samplers, ABC as well as state-space models (particle filtering and smoothing).
 
 ## Install
 ```
