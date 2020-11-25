@@ -7,15 +7,102 @@
 
 from typing import Tuple
 from time import time
+from functools import partial
 
 from jax import numpy as np, random, vmap, jit
-from jax.lax import while_loop, scan, cond
+from jax.lax import while_loop, scan, cond, map
 
 from mocat.src.core import CDict
 from mocat.src.ssm.ssm import StateSpaceModel
 from mocat.src.ssm.filters import ParticleFilter, run_particle_filter_for_marginals
 
 bound_inflation = 1.01
+
+
+# @partial(jit, static_argnums=(0,))
+# def full_sample(ssm_scenario: StateSpaceModel,
+#                 current_t_particle: np.ndarray,
+#                 t_marginal_particles: np.ndarray,
+#                 t: float,
+#                 tplus1_particle: np.ndarray,
+#                 tplus1: float,
+#                 reject_bool: bool,
+#                 t_marg_log_weights: np.ndarray,
+#                 random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+#     def full_sample_true() -> Tuple[np.ndarray, np.ndarray]:
+#         random_key, cat_key = random.split(random_key)
+#         adjusted_log_weights = t_marg_log_weights \
+#                                - vmap(ssm_scenario.transition_potential, (0, None, None, None))(t_marginal_particles, t,
+#                                                                                                 tplus1_particle, tplus1)
+#         resampled_ind = random.categorical(cat_key, adjusted_log_weights)
+#         return t_marginal_particles[resampled_ind], random_key
+#
+#     return cond(reject_bool,
+#                 lambda tup: full_sample_true(),
+#                 lambda tup: tup,
+#                 (current_t_particle, random_key))
+
+
+def rejection_proposal_true(ssm_scenario: StateSpaceModel,
+                            t_marginal_particles: np.ndarray,
+                            t: float,
+                            tplus1_particle: np.ndarray,
+                            tplus1: float,
+                            t_marg_log_weights: np.ndarray,
+                            bound_param: float,
+                            random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
+    random_key, cat_key, uniform_key = random.split(random_key, 3)
+    resampled_ind = random.categorical(cat_key, t_marg_log_weights)
+    t_particle = t_marginal_particles[resampled_ind]
+    transition_dens = np.exp(-ssm_scenario.transition_potential(t_particle, t, tplus1_particle, tplus1))
+    return t_particle, \
+           random.uniform(uniform_key) < transition_dens / bound_param, \
+           transition_dens, \
+           random_key
+
+
+def rejection_proposal(ssm_scenario: StateSpaceModel,
+                       current_t_particle: np.ndarray,
+                       t_marginal_particles: np.ndarray,
+                       t: float,
+                       tplus1_particle: np.ndarray,
+                       tplus1: float,
+                       reject_bool: bool,
+                       t_marg_log_weights: np.ndarray,
+                       bound_param: float,
+                       random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
+    return cond(reject_bool,
+                lambda _: rejection_proposal_true(ssm_scenario, t_marginal_particles, t,
+                                                  tplus1_particle, tplus1,
+                                                  t_marg_log_weights, bound_param, random_key),
+                lambda _: (current_t_particle, False, bound_param, random_key),
+                (t_marginal_particles, t,
+                 tplus1_particle, tplus1,
+                 t_marg_log_weights, bound_param, random_key))
+
+
+@partial(jit, static_argnums=(0,))
+def rejection_proposal_map(ssm_scenario: StateSpaceModel,
+                           current_t_particles: np.ndarray,
+                           marginal_particles: np.ndarray,
+                           t: float,
+                           tplus1_particles: np.ndarray,
+                           tplus1: float,
+                           reject_arr: np.ndarray,
+                           t_marg_log_weights: np.ndarray,
+                           bound_param: float,
+                           random_keys: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
+    return map(lambda i: rejection_proposal(ssm_scenario,
+                                            current_t_particles[i],
+                                            marginal_particles,
+                                            t,
+                                            tplus1_particles[i],
+                                            tplus1,
+                                            reject_arr[i],
+                                            t_marg_log_weights,
+                                            bound_param,
+                                            random_keys[i]),
+               np.arange(current_t_particles.shape[0]))
 
 
 def backward_simulation(ssm_scenario: StateSpaceModel,
@@ -32,37 +119,37 @@ def backward_simulation(ssm_scenario: StateSpaceModel,
     t_keys = random.split(random_key, T)
     final_particle_vals = marg_particles_vals[-1, random.categorical(t_keys[-1], marginal_log_weights[-1], shape=(n,))]
 
-    def rejection_proposal_true(t_marginal_particles: np.ndarray,
-                                t: float,
-                                tplus1_particle: np.ndarray,
-                                tplus1: float,
-                                t_marg_log_weights: np.ndarray,
-                                bound_param: float,
-                                random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
-        random_key, cat_key, uniform_key = random.split(random_key, 3)
-        resampled_ind = random.categorical(cat_key, t_marg_log_weights)
-        t_particle = t_marginal_particles[resampled_ind]
-        transition_dens = np.exp(-ssm_scenario.transition_potential(t_particle, t, tplus1_particle, tplus1))
-        return t_particle, \
-               random.uniform(uniform_key) < transition_dens / bound_param, \
-               transition_dens, \
-               random_key
-
-    def rejection_proposal(current_t_particle: np.ndarray,
-                           t_marginal_particles: np.ndarray,
-                           t: float,
-                           tplus1_particle: np.ndarray,
-                           tplus1: float,
-                           reject_bool: bool,
-                           t_marg_log_weights: np.ndarray,
-                           bound_param: float,
-                           random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
-        return cond(reject_bool,
-                    lambda tup: rejection_proposal_true(*tup),
-                    lambda _: (current_t_particle, False, bound_param, random_key),
-                    (t_marginal_particles, t,
-                     tplus1_particle, tplus1,
-                     t_marg_log_weights, bound_param, random_key))
+    # def rejection_proposal_true(t_marginal_particles: np.ndarray,
+    #                             t: float,
+    #                             tplus1_particle: np.ndarray,
+    #                             tplus1: float,
+    #                             t_marg_log_weights: np.ndarray,
+    #                             bound_param: float,
+    #                             random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
+    #     random_key, cat_key, uniform_key = random.split(random_key, 3)
+    #     resampled_ind = random.categorical(cat_key, t_marg_log_weights)
+    #     t_particle = t_marginal_particles[resampled_ind]
+    #     transition_dens = np.exp(-ssm_scenario.transition_potential(t_particle, t, tplus1_particle, tplus1))
+    #     return t_particle, \
+    #            random.uniform(uniform_key) < transition_dens / bound_param, \
+    #            transition_dens, \
+    #            random_key
+    #
+    # def rejection_proposal(current_t_particle: np.ndarray,
+    #                        t_marginal_particles: np.ndarray,
+    #                        t: float,
+    #                        tplus1_particle: np.ndarray,
+    #                        tplus1: float,
+    #                        reject_bool: bool,
+    #                        t_marg_log_weights: np.ndarray,
+    #                        bound_param: float,
+    #                        random_key: np.ndarray) -> Tuple[np.ndarray, bool, float, np.ndarray]:
+    #     return cond(reject_bool,
+    #                 lambda tup: rejection_proposal_true(*tup),
+    #                 lambda _: (current_t_particle, False, bound_param, random_key),
+    #                 (t_marginal_particles, t,
+    #                  tplus1_particle, tplus1,
+    #                  t_marg_log_weights, bound_param, random_key))
 
     def full_sample_true(t_marginal_particles: np.ndarray,
                          t: float,
@@ -92,24 +179,35 @@ def backward_simulation(ssm_scenario: StateSpaceModel,
                      tplus1_particle, tplus1,
                      t_marg_log_weights, random_key))
 
-    vectorised_rejection_proposal = jit(vmap(rejection_proposal, (0, None, None, 0, None, 0, None, None, 0)))
-
     def back_sim_body(particles_tplus1: np.ndarray,
                       time_ind: int):
         def backward_sim_propose_and_ar(carry: Tuple[np.ndarray, np.ndarray, float, int, np.ndarray]) \
                 -> Tuple[np.ndarray, np.ndarray, float, int, np.ndarray]:
             particles_t, reject_arr, bound_t, r_attemped, int_keys = carry
 
+            # particles_t, reject_arr, transition_densities, int_keys \
+            #     = map(lambda i: rejection_proposal(particles_t[i],
+            #                                        marg_particles_vals[time_ind],
+            #                                        times[time_ind],
+            #                                        particles_tplus1[i],
+            #                                        times[time_ind + 1],
+            #                                        reject_arr[i],
+            #                                        marginal_log_weights[time_ind],
+            #                                        bound_t,
+            #                                        int_keys[i]),
+            #           np.arange(n))
+
             particles_t, reject_arr, transition_densities, int_keys \
-                = vectorised_rejection_proposal(particles_t,
-                                                marg_particles_vals[time_ind],
-                                                times[time_ind],
-                                                particles_tplus1,
-                                                times[time_ind + 1],
-                                                reject_arr,
-                                                marginal_log_weights[time_ind],
-                                                bound_t,
-                                                int_keys)
+                = rejection_proposal_map(ssm_scenario,
+                                         particles_t,
+                                         marg_particles_vals[time_ind],
+                                         times[time_ind],
+                                         particles_tplus1,
+                                         times[time_ind + 1],
+                                         reject_arr,
+                                         marginal_log_weights[time_ind],
+                                         bound_t,
+                                         int_keys)
 
             max_td = np.max(transition_densities)
             reset_bound = max_td > bound_t
