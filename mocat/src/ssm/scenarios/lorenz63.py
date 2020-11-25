@@ -5,8 +5,6 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from functools import partial
-
 from jax import numpy as np, random, jit
 from jax.experimental.ode import odeint
 
