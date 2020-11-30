@@ -13,6 +13,7 @@ from mocat.version import __version__
 
 from mocat.src.core import Scenario
 from mocat.src.core import CDict
+from mocat.src.core import save_CDict
 from mocat.src.core import load_CDict
 from mocat.src.core import Sampler
 

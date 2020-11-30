@@ -31,8 +31,8 @@ class ImportanceABC(ABCSampler):
                    abc_scenario: ABCScenario,
                    state: CDict,
                    extra: CDict):
-        return np.where(abc_scenario.distance_function(state.simulated_data)
-                        < abc_scenario.threshold,
+        return np.where(np.all(abc_scenario.distance_function(state.simulated_data)
+                        < abc_scenario.threshold),
                         - abc_scenario.prior_potential(state.value)
                         + self.importance_potential(abc_scenario, state.value),
                         -np.inf)
@@ -83,8 +83,7 @@ class VanillaABC(ImportanceABC):
                    abc_scenario: ABCScenario,
                    state: CDict,
                    extra: CDict):
-        return np.where(state.distance
-                        < abc_scenario.threshold,
+        return np.where(np.all(state.distance < abc_scenario.threshold),
                         0.,
                         -np.inf)
 
@@ -104,7 +103,7 @@ class RandomWalkABC(ABCSampler):
                                proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
         return np.minimum(1., np.exp(-proposed_state.prior_potential
                                      + reject_state.prior_potential)
-                          * (proposed_state.distance < abc_scenario.threshold))
+                          * np.all(proposed_state.distance < abc_scenario.threshold))
 
     def proposal(self,
                  abc_scenario: ABCScenario,
@@ -113,7 +112,7 @@ class RandomWalkABC(ABCSampler):
         proposed_state = reject_state.copy()
         proposed_extra = reject_extra.copy()
         stepsize = reject_extra.parameters.stepsize
-        proposed_extra.random_key, subkey1, subkey2 = random.split(reject_extra.random_key, 3)
+        subkey1, subkey2 = random.split(reject_extra.random_key)
         proposed_state.value = reject_state.value + np.sqrt(stepsize) * random.normal(subkey1, (abc_scenario.dim,))
         proposed_extra.simulated_data = abc_scenario.simulate(proposed_state.value, subkey2)
         proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)

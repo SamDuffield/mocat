@@ -198,7 +198,7 @@ def while_loop_stacked(cond_fun: Callable,
                        init_carry: Tuple[Any, Any],
                        max_iter: int = 1000) -> Any:
     full_stack, final_int = _while_loop_stacked(cond_fun, body_fun, init_carry, max_iter)
-    return full_stack[:final_int]
+    return tuple(a[:final_int] for a in full_stack) if isinstance(full_stack, tuple) else full_stack[:final_int]
 
 
 @partial(jit, static_argnums=(0,))

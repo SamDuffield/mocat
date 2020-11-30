@@ -14,6 +14,7 @@ from mocat.src.ssm.filters import propagate_particles
 from mocat.src.ssm.filters import run_particle_filter_for_marginals
 
 from mocat.src.ssm.backward import backward_simulation
+from mocat.src.ssm.backward import backward_simulation_full
 from mocat.src.ssm.backward import forward_filtering_backward_simulation
 
 from mocat.src.ssm.linear_gaussian.linear_gaussian import LinearGaussian

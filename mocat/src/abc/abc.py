@@ -55,7 +55,7 @@ class ABCScenario(Scenario):
 
     def summarise_data(self,
                        data: np.ndarray) -> np.ndarray:
-        raise AttributeError(f'{self.name} summarise_data not initiated')
+        raise data
 
     def distance_function(self,
                           summarised_simulated_data: np.ndarray) -> Union[float, np.ndarray]:
@@ -63,6 +63,8 @@ class ABCScenario(Scenario):
 
 
 class ABCSampler(MCMCSampler):
+
+    tuning = None
 
     def __init__(self,
                  **kwargs):
@@ -96,6 +98,7 @@ class ABCSampler(MCMCSampler):
                abc_scenario: ABCScenario,
                reject_state: CDict,
                reject_extra: CDict) -> Tuple[CDict, CDict]:
+        reject_extra.random_key, _ = random.split(reject_extra.random_key)
         return reject_state, reject_extra
 
     def proposal(self,
