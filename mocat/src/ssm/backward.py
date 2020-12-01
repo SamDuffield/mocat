@@ -10,7 +10,7 @@ from time import time
 from functools import partial
 
 from jax import numpy as np, random, vmap, jit
-from jax.lax import while_loop, scan, cond, map
+from jax.lax import while_loop, scan, cond, map, fori_loop
 
 from mocat.src.core import CDict
 from mocat.src.ssm.ssm import StateSpaceModel
@@ -53,7 +53,7 @@ def full_resample_single_cond(not_yet_accepted: bool,
                               random_key: np.ndarray) -> np.ndarray:
     return cond(not_yet_accepted,
                 lambda _: full_resample_single(ssm_scenario, x0_all, t, x1_single, tplus1, x0_log_weights, random_key),
-                lambda _: x0_false,  # dummy of same type as full_resample_single output
+                lambda _: x0_false,
                 None)
 
 
@@ -166,39 +166,126 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
 
     return full_particles, not_yet_accepted_arr, final_bound, rej_attemped
 
+#
+# def rejection_proposal_single(ssm_scenario: StateSpaceModel,
+#                               x0_all: np.ndarray,
+#                               t: float,
+#                               x1_single: np.ndarray,
+#                               tplus1: float,
+#                               bound: float,
+#                               cat_ind: int,
+#                               unif_val: float) \
+#         -> Tuple[np.ndarray, float, bool]:
+#     x0_single = x0_all[cat_ind]
+#     conditional_dens = np.exp(-ssm_scenario.transition_potential(x0_single, t, x1_single, tplus1))
+#     return x0_single, conditional_dens, unif_val > conditional_dens / bound
+#
+#
+# def rejection_proposal_single_cond(not_yet_accepted: bool,
+#                                    x0_false: np.ndarray,
+#                                    ssm_scenario: StateSpaceModel,
+#                                    x0_all: np.ndarray,
+#                                    t: float,
+#                                    x1_single: np.ndarray,
+#                                    tplus1: float,
+#                                    bound: float,
+#                                    cat_ind: int,
+#                                    unif_val: float) -> Tuple[np.ndarray, float, bool]:
+#     return cond(not_yet_accepted,
+#                 lambda _: rejection_proposal_single(ssm_scenario,
+#                                                     x0_all, t,
+#                                                     x1_single, tplus1,
+#                                                     bound, cat_ind, unif_val),
+#                 lambda _: (x0_false, 0., False),
+#                 None)
+#
+#
+# def rejection_proposal_all(ssm_scenario: StateSpaceModel,
+#                            x0_all: np.ndarray,
+#                            t: float,
+#                            x1_all: np.ndarray,
+#                            tplus1: float,
+#                            not_yet_accepted_arr: np.ndarray,
+#                            x0_all_sampled: np.ndarray,
+#                            bound: float,
+#                            cat_inds: np.ndarray,
+#                            unif_vals: np.ndarray) -> Tuple[Tuple[np.ndarray, np.ndarray, float], None]:
+#     n = len(x1_all)
+#     mapped_tup = map(lambda i: rejection_proposal_single_cond(not_yet_accepted_arr[i],
+#                                                               x0_all_sampled[i],
+#                                                               ssm_scenario,
+#                                                               x0_all,
+#                                                               t,
+#                                                               x1_all[i],
+#                                                               tplus1,
+#                                                               bound,
+#                                                               cat_inds[i],
+#                                                               unif_vals[i]), np.arange(n))
+#     x0_all_sampled, dens_evals, not_yet_accepted_arr_new = mapped_tup
+#
+#     # Check if we need to start again
+#     max_dens = np.max(dens_evals)
+#     reset_bound = max_dens > bound
+#     bound = np.where(reset_bound, max_dens * bound_inflation, bound)
+#     not_yet_accepted_arr_new = np.where(reset_bound, np.ones(n, dtype='bool'), not_yet_accepted_arr_new)
+#     return not_yet_accepted_arr_new, x0_all_sampled, bound
+#
+#
+# @partial(jit, static_argnums=(0, 7))
+# def rejection_resampling(ssm_scenario: StateSpaceModel,
+#                          x0_all: np.ndarray,
+#                          t: float,
+#                          x1_all: np.ndarray,
+#                          tplus1: float,
+#                          x0_log_weights: np.ndarray,
+#                          random_key: np.ndarray,
+#                          maximum_rejections: int,
+#                          init_bound_param: float) -> Tuple[np.ndarray, np.ndarray, float]:
+#     n = len(x1_all)
+#
+#     random_key, cat_key, unif_key, full_resamp_key = random.split(random_key, 4)
+#
+#     cat_inds = random.categorical(cat_key, logits=x0_log_weights, shape=(maximum_rejections, n))
+#     unif_vals = random.uniform(unif_key, shape=(maximum_rejections, n))
+#
+#     # Prerun to initiate bound
+#     x0_initial = x0_all[cat_inds[0]]
+#     initial_cond_dens = np.exp(-vmap(ssm_scenario.transition_potential,
+#                                      (0, None, 0, None))(x0_initial, t, x1_all, tplus1))
+#     max_cond_dens = np.max(initial_cond_dens)
+#     initial_bound = np.where(max_cond_dens > init_bound_param, max_cond_dens * bound_inflation, init_bound_param)
+#     initial_not_yet_accepted_arr = unif_vals[0] > initial_cond_dens / initial_bound
+#
+#     # out_tup, _ = scan(lambda carry, rej_ind: (rejection_proposal_all(ssm_scenario, x0_all, t, x1_all, tplus1,
+#     #                                                                 carry[0], carry[1],
+#     #                                                                 carry[2], cat_inds[rej_ind], unif_vals[rej_ind]), None),
+#     #                   (initial_not_yet_accepted_arr, x0_initial, initial_bound),
+#     #                   np.arange(1, maximum_rejections))
+#
+#     out_tup = fori_loop(1, maximum_rejections,
+#                         lambda rej_ind, carry: rejection_proposal_all(ssm_scenario, x0_all, t, x1_all, tplus1,
+#                                                                       carry[0], carry[1],
+#                                                                       carry[2], cat_inds[rej_ind], unif_vals[rej_ind]),
+#                         (initial_not_yet_accepted_arr, x0_initial, initial_bound))
+#
+#     not_yet_accepted_arr, final_rej_particles, final_bound = out_tup
+#
+#     full_resamp_keys = random.split(full_resamp_key, n)
+#
+#     full_particles = map(lambda i: full_resample_single_cond(not_yet_accepted_arr[i],
+#                                                              final_rej_particles[i],
+#                                                              ssm_scenario,
+#                                                              x0_all,
+#                                                              t,
+#                                                              x1_all[i],
+#                                                              tplus1,
+#                                                              x0_log_weights,
+#                                                              full_resamp_keys[i]), np.arange(n))
+#
+#     return full_particles, not_yet_accepted_arr, final_bound
 
-@partial(jit, static_argnums=(0, 3))
-def backward_simulation_full(ssm_scenario: StateSpaceModel,
-                             marginal_particles: CDict,
-                             random_key: np.ndarray,
-                             n_samps: int) -> CDict:
-    marg_particles_vals = marginal_particles.value
-    times = marginal_particles.t
-    marginal_log_weights = marginal_particles.log_weights
 
-    T, n_pf, d = marg_particles_vals.shape
-
-    t_keys = random.split(random_key, T)
-    final_particle_vals = marg_particles_vals[-1, random.categorical(t_keys[-1],
-                                                                     marginal_log_weights[-1],
-                                                                     shape=(n_samps,))]
-
-    def back_sim_body(x_tplus1_all: np.ndarray, ind: int):
-        x_t_all = full_resampling(ssm_scenario, marg_particles_vals[ind], times[ind],
-                                  x_tplus1_all, times[ind + 1], marginal_log_weights[ind], t_keys[ind])
-        return x_t_all, x_t_all
-
-    _, back_sim_particles = scan(back_sim_body,
-                                 final_particle_vals,
-                                 np.arange(T - 2, -1, -1))
-
-    out_samps = marginal_particles.copy()
-    out_samps.value = np.vstack([back_sim_particles[::-1], final_particle_vals[np.newaxis]])
-    del out_samps.log_weights
-    return out_samps
-
-
-@partial(jit, static_argnums=(0, 3))
+@partial(jit, static_argnums=(0, 3, 4))
 def backward_simulation(ssm_scenario: StateSpaceModel,
                         marginal_particles: CDict,
                         random_key: np.ndarray,
@@ -225,7 +312,38 @@ def backward_simulation(ssm_scenario: StateSpaceModel,
 
     _, back_sim_particles = scan(back_sim_body,
                                  final_particle_vals,
-                                 np.arange(T - 2, -1, -1), unroll=4)
+                                 np.arange(T - 2, -1, -1), unroll=1)
+
+    out_samps = marginal_particles.copy()
+    out_samps.value = np.vstack([back_sim_particles[::-1], final_particle_vals[np.newaxis]])
+    del out_samps.log_weights
+    return out_samps
+
+
+@partial(jit, static_argnums=(0, 3))
+def backward_simulation_full(ssm_scenario: StateSpaceModel,
+                             marginal_particles: CDict,
+                             random_key: np.ndarray,
+                             n_samps: int) -> CDict:
+    marg_particles_vals = marginal_particles.value
+    times = marginal_particles.t
+    marginal_log_weights = marginal_particles.log_weights
+
+    T, n_pf, d = marg_particles_vals.shape
+
+    t_keys = random.split(random_key, T)
+    final_particle_vals = marg_particles_vals[-1, random.categorical(t_keys[-1],
+                                                                     marginal_log_weights[-1],
+                                                                     shape=(n_samps,))]
+
+    def back_sim_body(x_tplus1_all: np.ndarray, ind: int):
+        x_t_all = full_resampling(ssm_scenario, marg_particles_vals[ind], times[ind],
+                                  x_tplus1_all, times[ind + 1], marginal_log_weights[ind], t_keys[ind])
+        return x_t_all, x_t_all
+
+    _, back_sim_particles = scan(back_sim_body,
+                                 final_particle_vals,
+                                 np.arange(T - 2, -1, -1))
 
     out_samps = marginal_particles.copy()
     out_samps.value = np.vstack([back_sim_particles[::-1], final_particle_vals[np.newaxis]])
