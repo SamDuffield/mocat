@@ -10,7 +10,7 @@ from time import time
 from functools import partial
 
 from jax import numpy as np, random, vmap, jit
-from jax.lax import while_loop, scan, cond, map, fori_loop
+from jax.lax import while_loop, scan, cond, map
 
 from mocat.src.core import CDict
 from mocat.src.ssm.ssm import StateSpaceModel
@@ -123,7 +123,37 @@ def rejection_proposal_all(ssm_scenario: StateSpaceModel,
     return not_yet_accepted_arr_new, x0_all_sampled, bound, random_keys, rejection_iter + 1
 
 
-@partial(jit, static_argnums=(0,))
+# @partial(jit, static_argnums=(0,))
+# def rejection_proposal_single(ssm_scenario, x0_all, t, x1_single, tplus1, x0_log_weights, carry: tuple) \
+#         -> Tuple[np.ndarray, float, bool, np.ndarray, int]:
+#     _, int_bound, _, int_random_key, int_mr = carry
+#     int_random_key, choice_key, uniform_key = random.split(int_random_key, 3)
+#     x0_single = x0_all[random.categorical(choice_key, x0_log_weights)]
+#     conditional_dens = np.exp(-ssm_scenario.transition_potential(x0_single, t, x1_single, tplus1))
+#     return x0_single, np.maximum(conditional_dens, int_bound), random.uniform(
+#         uniform_key) > conditional_dens / int_bound, int_random_key, int_mr + 1
+#
+#
+#
+# @partial(jit, static_argnums=(0,))
+# def rejection_sample_single(ssm_scenario: StateSpaceModel,
+#                             not_yet_accepted: bool,
+#                             x0_false: np.ndarray,
+#                             x0_all: np.ndarray,
+#                             t: float,
+#                             x1_single: np.ndarray,
+#                             tplus1: float,
+#                             x0_log_weights: np.ndarray,
+#                             bound: float,
+#                             maximum_rejections: int,
+#                             random_key: np.ndarray) -> Tuple[np.ndarray, float, bool, np.ndarray, int]:
+#
+#     return while_loop(lambda tup: np.logical_and(tup[2], tup[4] < maximum_rejections),
+#                       lambda tup: rejection_proposal_single(ssm_scenario, x0_all, t, x1_single, tplus1, x0_log_weights, tup),
+#                       (x0_false, bound, not_yet_accepted, random_key, 1))
+
+
+@partial(jit, static_argnums=(0, 7))
 def rejection_resampling(ssm_scenario: StateSpaceModel,
                          x0_all: np.ndarray,
                          t: float,
@@ -152,19 +182,20 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
                           initial_bound,
                           random.split(rejection_initial_keys[2], n),
                           1))
-    not_yet_accepted_arr, final_rej_particles, final_bound, random_keys, rej_attemped = out_tup
+    not_yet_accepted_arr, final_particles, final_bound, random_keys, rej_attempted = out_tup
 
-    full_particles = map(lambda i: full_resample_single_cond(not_yet_accepted_arr[i],
-                                                             final_rej_particles[i],
-                                                             ssm_scenario,
-                                                             x0_all,
-                                                             t,
-                                                             x1_all[i],
-                                                             tplus1,
-                                                             x0_log_weights,
-                                                             random_keys[i]), np.arange(n))
+    final_particles = map(lambda i: full_resample_single_cond(not_yet_accepted_arr[i],
+                                                              final_particles[i],
+                                                              ssm_scenario,
+                                                              x0_all,
+                                                              t,
+                                                              x1_all[i],
+                                                              tplus1,
+                                                              x0_log_weights,
+                                                              random_keys[i]), np.arange(n))
 
-    return full_particles, not_yet_accepted_arr, final_bound, rej_attemped
+    return final_particles
+
 
 #
 # def rejection_proposal_single(ssm_scenario: StateSpaceModel,
@@ -307,7 +338,7 @@ def backward_simulation(ssm_scenario: StateSpaceModel,
         x_t_all = rejection_resampling(ssm_scenario,
                                        marg_particles_vals[ind], times[ind],
                                        x_tplus1_all, times[ind + 1],
-                                       marginal_log_weights[ind], t_keys[ind], maximum_rejections, init_bound_param)[0]
+                                       marginal_log_weights[ind], t_keys[ind], maximum_rejections, init_bound_param)
         return x_t_all, x_t_all
 
     _, back_sim_particles = scan(back_sim_body,
