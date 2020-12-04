@@ -68,7 +68,7 @@ def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
 
     samps.time = end - start
 
-    if name is None and scenario is not None:
+    if name is None and scenario.name is not None:
         name = scenario.name + ": TEKI"
 
     samps.name = name
