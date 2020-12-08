@@ -226,7 +226,8 @@ def _run_prescheduled_smc_sampler(scenario: Scenario,
     initial_potential_vec = vmap(initial_potential_func)
     target_potential_vec = vmap(scenario.potential)
 
-    smc_sampler_advance = init_smc_sampler_advance(scheduler, mcmc_sampler,
+    smc_sampler_advance = init_smc_sampler_advance(scheduler,
+                                                   mcmc_sampler,
                                                    mcmc_correction,
                                                    mcmc_steps,
                                                    post_mcmc_update)
@@ -279,7 +280,8 @@ def _run_adaptive_smc_sampler(scenario: Scenario,
 
     log_n_samp_threshold = np.log(n_samps * ess_threshold)
 
-    smc_sampler_advance = init_smc_sampler_advance(scheduler, mcmc_sampler,
+    smc_sampler_advance = init_smc_sampler_advance(scheduler,
+                                                   mcmc_sampler,
                                                    mcmc_correction,
                                                    mcmc_steps,
                                                    post_mcmc_update)

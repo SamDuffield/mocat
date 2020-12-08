@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: abc/standard_abc.py
-# Description: Importance sampling and Markov ABC, accept if simulated summarised_data hits ball.
+# Description: Importance sampling and Markov ABC, accept if simulated summary_statistic hits ball.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################

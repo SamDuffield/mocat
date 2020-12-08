@@ -14,8 +14,8 @@ from mocat.src.mcmc.sampler import MCMCSampler
 
 class ABCScenario(Scenario):
 
-    full_data: np.ndarray = None
-    summarised_data: np.ndarray = None
+    data: np.ndarray = None
+    summary_statistic: np.ndarray = None
     threshold: float = None
 
     def __init__(self,
@@ -42,7 +42,7 @@ class ABCScenario(Scenario):
     def simulate(self,
                  x: np.ndarray,
                  random_key: np.ndarray) -> np.ndarray:
-        data_keys = random.split(random_key, self.full_data.shape[0])
+        data_keys = random.split(random_key, self.data.shape[0])
         return self.summarise_data(vmap(self.likelihood_sample, (None, 0))(x, data_keys))
 
     def prior_potential(self,
@@ -75,8 +75,8 @@ class ABCSampler(MCMCSampler):
                 initial_state: CDict = None,
                 initial_extra: CDict = None,
                 random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
-        if abc_scenario.summarised_data is None:
-            abc_scenario.summarised_data = abc_scenario.summarise_data(abc_scenario.full_data)
+        if abc_scenario.summary_statistic is None:
+            abc_scenario.summary_statistic = abc_scenario.summarise_data(abc_scenario.data)
 
         if initial_state is None:
             x0 = np.zeros(abc_scenario.dim)
@@ -88,6 +88,8 @@ class ABCSampler(MCMCSampler):
                                   iter=0)
         if hasattr(self, 'parameters'):
             initial_extra.parameters = self.parameters.copy()
+
+        initial_state.prior_potential = abc_scenario.prior_potential(initial_state.value)
 
         random_key, subkey = random.split(random_key)
         initial_extra.simulated_data = abc_scenario.simulate(initial_state.value, subkey)

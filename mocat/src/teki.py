@@ -1,8 +1,8 @@
 ########################################################################################################################
 # Module: teki.py
 # Description: Tempered ensemble Kalman inversion.
-#              Iteratively simulate summarised_data to get joint empirical mean and cov
-#              before conditioning on given summarised_data.
+#              Iteratively simulate summary_statistic to get joint empirical mean and cov
+#              before conditioning on given summary_statistic.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -34,10 +34,12 @@ def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
                                            bisection_tol: float = 1e-5,
                                            name: str = None) -> CDict:
     if data is None:
-        if hasattr(scenario, 'data'):
+        if hasattr(scenario, 'summary_statistic'):
+            data = scenario.summary_statistic
+        elif hasattr(scenario, 'data'):
             data = scenario.data
         else:
-            raise TypeError(f"EKI cannot find data in arguments or {scenario}.")
+            raise TypeError(f"TEKI cannot find summary_statistic or data in arguments or {scenario}.")
 
     data = np.atleast_1d(data)
 
