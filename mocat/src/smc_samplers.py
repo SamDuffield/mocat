@@ -14,7 +14,7 @@ from jax.scipy.special import logsumexp
 
 from mocat.src.core import Scenario, CDict
 from mocat.src.mcmc.sampler import MCMCSampler
-from mocat.src.mcmc.corrections import Correction
+from mocat.src.mcmc.corrections import Correction, Metropolis
 from mocat.src.mcmc.run import startup_mcmc, check_correction
 from mocat.src.utils import gaussian_potential, while_loop_stacked, bisect
 
@@ -133,6 +133,17 @@ def default_post_mcmc_update(previous_full_state: CDict,
     return new_full_state, new_full_extra
 
 
+def default_post_metropolis_mcmc_update(previous_full_state: CDict,
+                                        previous_full_extra: CDict,
+                                        new_enlarged_state: CDict,
+                                        new_enlarged_extra: CDict) -> Tuple[CDict, CDict]:
+    new_full_state = new_enlarged_state[:, -1]
+    new_full_extra = new_enlarged_extra[:, -1]
+    new_full_extra.parameters = new_full_extra.parameters[:, -1]
+    new_full_state.alpha = new_enlarged_state.alpha.mean(1)
+    return new_full_state, new_full_extra
+
+
 def run_smc_sampler(scenario: Scenario,
                     n_samps: int,
                     random_key: np.ndarray,
@@ -144,7 +155,7 @@ def run_smc_sampler(scenario: Scenario,
                     initial_state: CDict = None,
                     initial_potential_func: Callable = None,
                     initial_grad_potential_func: Callable = None,
-                    post_mcmc_update: Callable = default_post_mcmc_update,
+                    post_mcmc_update: Callable = None,
                     max_iter: int = 1000,
                     ess_threshold: float = 0.8,
                     max_extend_multiplier: float = np.inf,
@@ -182,6 +193,12 @@ def run_smc_sampler(scenario: Scenario,
     if None in initial_extra.parameters.__dict__.values():
         raise ValueError(f'None found in {mcmc_sampler.name} parameters (within SMC sampler): '
                          + str(mcmc_sampler.parameters))
+
+    if post_mcmc_update is None:
+        if hasattr(initial_state, 'alpha'):
+            post_mcmc_update = default_post_metropolis_mcmc_update
+        else:
+            post_mcmc_update = default_post_mcmc_update
 
     initial_extra.random_key = random.split(random_key, n_samps)
 

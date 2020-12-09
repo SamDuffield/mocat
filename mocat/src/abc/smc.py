@@ -13,6 +13,7 @@ from jax import numpy as np, random, vmap
 from jax.lax import scan
 
 from mocat.src.abc.abc import ABCSampler, ABCScenario
+from mocat.src.abc.standard_abc import RandomWalkABC
 from mocat.src.core import CDict
 from mocat.src.utils import while_loop_stacked
 from mocat.src.mcmc.corrections import Correction
@@ -20,36 +21,59 @@ from mocat.src.smc_samplers import default_post_mcmc_update
 from mocat.src.mcmc.run import startup_mcmc, check_correction
 
 
-def run_smc_sampler(abc_scenario: ABCScenario,
-                    n_samps: int,
-                    random_key: np.ndarray,
-                    mcmc_sampler: ABCSampler,
-                    mcmc_correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
-                    mcmc_steps: int = 20,
-                    preschedule: np.ndarray = None,
-                    initial_state: CDict = None,
-                    post_mcmc_update: Callable = default_post_mcmc_update,
-                    max_iter: int = 1000,
-                    threshold_quantile_retain: float = 0.95,
-                    continuation_func: Callable = None,
-                    name: str = None) -> CDict:
-    mcmc_sampler, mcmc_correction = check_correction(mcmc_sampler, mcmc_correction)
+def default_post_metropolis_abc_mcmc_update(previous_full_state: CDict,
+                                            previous_full_extra: CDict,
+                                            new_enlarged_state: CDict,
+                                            new_enlarged_extra: CDict) -> Tuple[CDict, CDict]:
+    new_full_state = new_enlarged_state[:, -1]
+    new_full_extra = new_enlarged_extra[:, -1]
+    new_full_extra.parameters = new_full_extra.parameters[:, -1]
+    new_full_state.alpha = new_enlarged_state.alpha.mean(1)
 
+    d = new_full_state.value.shape[-1]
+    new_full_extra.parameters.stepsize = np.cov(new_full_state.value, rowvar=False) / d * 2.38 ** 2
+
+    return new_full_state, new_full_extra
+
+
+def run_abc_smc_sampler(abc_scenario: ABCScenario,
+                        n_samps: int,
+                        random_key: np.ndarray,
+                        mcmc_sampler: ABCSampler = None,
+                        mcmc_correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
+                        mcmc_steps: int = 20,
+                        preschedule: np.ndarray = None,
+                        initial_state: CDict = None,
+                        post_mcmc_update: Callable = default_post_mcmc_update,
+                        max_iter: int = 1000,
+                        threshold_quantile_retain: float = 0.95,
+                        continuation_func: Callable = None,
+                        name: str = None) -> CDict:
     if initial_state is None:
         random_key, sub_key = random.split(random_key)
         x0 = vmap(abc_scenario.prior_sample)(random.split(sub_key, n_samps))
         initial_state = CDict(value=x0)
 
-    initial_extra = CDict(random_key=None,
-                          iter=0)
+    if mcmc_sampler is None:
+        mcmc_sampler = RandomWalkABC(stepsize=np.cov(initial_state.value, rowvar=False) / abc_scenario.dim * 2.38 ** 2)
+
+    mcmc_sampler, mcmc_correction = check_correction(mcmc_sampler, mcmc_correction)
+
+    initial_extra = CDict(random_key=None, iter=0)
 
     initial_state, initial_extra = vmap(
         lambda state: startup_mcmc(abc_scenario, mcmc_sampler, None, mcmc_correction,
                                    state, initial_extra))(initial_state)
 
     if None in initial_extra.parameters.__dict__.values():
-        raise ValueError(f'None found in {mcmc_sampler.name} parameters (within SMC sampler): '
+        raise ValueError(f'None found in {mcmc_sampler.name} parameters (within ABC-SMC sampler): '
                          + str(mcmc_sampler.parameters))
+
+    if post_mcmc_update is None:
+        if hasattr(initial_state, 'alpha'):
+            post_mcmc_update = default_post_metropolis_abc_mcmc_update
+        else:
+            post_mcmc_update = default_post_mcmc_update
 
     initial_extra.random_key = random.split(random_key, n_samps)
 
@@ -60,7 +84,7 @@ def run_smc_sampler(abc_scenario: ABCScenario,
                                                       preschedule, initial_state, initial_extra, post_mcmc_update)
     else:
         if continuation_func is None:
-            continuation_func = lambda state, extra: len(state.threshold) <= 100
+            continuation_func = lambda state, extra: state.alpha.mean() > 0.015
 
         out_samps = _run_adaptive_abc_smc_sampler(abc_scenario, mcmc_sampler, mcmc_correction, mcmc_steps,
                                                   initial_state, initial_extra,
@@ -87,7 +111,8 @@ def _run_prescheduled_abc_smc_sampler(abc_scenario: ABCScenario,
                                       post_mcmc_update: Callable) -> CDict:
     initial_state.threshold_schedule = preschedule[0]
 
-    abc_smc_sampler_advance = init_abc_smc_sampler_advance(mcmc_sampler,
+    abc_smc_sampler_advance = init_abc_smc_sampler_advance(abc_scenario,
+                                                           mcmc_sampler,
                                                            mcmc_correction,
                                                            mcmc_steps,
                                                            post_mcmc_update)

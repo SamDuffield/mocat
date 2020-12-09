@@ -6,7 +6,7 @@
 ########################################################################################################################
 
 from time import time
-from typing import Union, Tuple, Type, Any
+from typing import Union, Tuple, Type, Any, TypeVar
 from inspect import isclass
 
 from jax import numpy as np, jit
@@ -16,12 +16,14 @@ from mocat.src.core import Scenario, CDict
 from mocat.src.mcmc.corrections import Correction, Uncorrected
 from mocat.src.mcmc.sampler import MCMCSampler
 
+MCMCSamplerType = TypeVar('MCMCSamplerType', bound=MCMCSampler)
 
-def check_correction(sampler: MCMCSampler,
+
+def check_correction(sampler: MCMCSamplerType,
                      correction: Union[None, str, Correction, Type[Correction]],
-                     **kwargs) -> Tuple[MCMCSampler, Correction]:
+                     **kwargs) -> Tuple[MCMCSamplerType, Correction]:
     # Setup correction
-    if correction == 'sampler_default':
+    if correction == 'sampler_default' and hasattr(sampler, 'default_correction'):
         correction = sampler.default_correction
 
     if correction is None:
@@ -85,7 +87,6 @@ def run_mcmc(scenario: Scenario,
              name: str = None,
              return_random_key: bool = False,
              **kwargs) -> Union[CDict, Tuple[CDict, np.ndarray]]:
-
     sampler, correction = check_correction(sampler, correction, **kwargs)
     initial_state, initial_extra = startup_mcmc(scenario, sampler, random_key, correction, initial_state, initial_extra)
     run_params = mcmc_run_params(sampler, correction, initial_state, initial_extra)
