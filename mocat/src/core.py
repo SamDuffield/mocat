@@ -53,11 +53,6 @@ class Scenario:
     def dens(self, x: np.ndarray) -> Union[float, np.ndarray]:
         return np.exp(-self.potential(x))
 
-    def simulate(self,
-                 x: np.ndarray,
-                 random_key: np.ndarray) -> np.ndarray:
-        raise AttributeError(f'{self.name} simulate not initiated')
-
 
 @register_pytree_node_class
 class CDict:

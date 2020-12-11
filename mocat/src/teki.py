@@ -15,10 +15,11 @@ from jax.lax import scan
 from jax.scipy.special import logsumexp
 
 from mocat.src.core import CDict, Scenario
+from mocat.src.abc.abc import ABCScenario
 from mocat.src.utils import while_loop_stacked, bisect
 
 
-def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
+def run_tempered_ensemble_kalman_inversion(scenario: Union[Scenario, Callable],
                                            n_samps: int,
                                            random_key: np.ndarray,
                                            data: Union[float, np.ndarray] = None,
@@ -33,6 +34,13 @@ def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
                                            max_bisection_iter: int = 1000,
                                            bisection_tol: float = 1e-5,
                                            name: str = None) -> CDict:
+    if isinstance(scenario, Scenario) and hasattr(scenario, 'simulate'):
+        simulator = scenario.simulate
+    elif isinstance(scenario, ABCScenario):
+        simulator = lambda x, r_key: scenario.summarise_data(scenario.simulate(x, r_key))
+    else:
+        simulator = scenario
+
     if data is None:
         if hasattr(scenario, 'summary_statistic'):
             data = scenario.summary_statistic
@@ -51,19 +59,19 @@ def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
     start = time()
     if temperature_schedule is None:
         if ess_threshold is not None:
-            samps = _run_adaptive_teki_ess(scenario, n_samps, random_key, data, prior_samps,
+            samps = _run_adaptive_teki_ess(simulator, n_samps, random_key, data, prior_samps,
                                            max_iter, max_temp, ess_threshold, min_temp_increase,
                                            max_bisection_iter, bisection_tol)
         elif termination_criterion is not None:
-            samps = _run_adaptive_teki_termination_criterion(scenario, n_samps, random_key, data, prior_samps,
+            samps = _run_adaptive_teki_termination_criterion(simulator, n_samps, random_key, data, prior_samps,
                                                              max_iter, termination_criterion, theta)
         else:
             if theta is None:
                 theta = data.size / 2
-            samps = _run_adaptive_teki(scenario, n_samps, random_key, data, prior_samps,
+            samps = _run_adaptive_teki(simulator, n_samps, random_key, data, prior_samps,
                                        max_iter, max_temp, theta)
     else:
-        samps = _run_presheduled_teki(scenario, n_samps, random_key, data, prior_samps,
+        samps = _run_presheduled_teki(simulator, n_samps, random_key, data, prior_samps,
                                       temperature_schedule)
     samps.value.block_until_ready()
     end = time()
@@ -81,13 +89,13 @@ def run_tempered_ensemble_kalman_inversion(scenario: Scenario,
     return samps
 
 
-def _run_presheduled_teki(scenario: Scenario,
+def _run_presheduled_teki(simulator: Callable,
                           n_samps: int,
                           random_key: np.ndarray,
                           data: np.ndarray,
                           prior_samps: np.ndarray,
                           temperature_schedule: np.ndarray) -> CDict:
-    d = scenario.dim
+    d = prior_samps.shape[-1]
     d_y = len(data)
 
     n_iter = len(temperature_schedule)
@@ -96,7 +104,7 @@ def _run_presheduled_teki(scenario: Scenario,
     sim_keys = random.split(sim_key, n_iter)
     perturb_keys = random.split(perturb_key, n_iter)
 
-    simulate_data = vmap(lambda samp, key: scenario.simulate(samp, key))
+    simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
     def eki_body(previous_samps: CDict,
                  i: int) -> Tuple[CDict, CDict]:
@@ -148,7 +156,7 @@ def _run_presheduled_teki(scenario: Scenario,
     return samps
 
 
-def _run_adaptive_teki(scenario: Scenario,
+def _run_adaptive_teki(simulator: Callable,
                        n_samps: int,
                        random_key: np.ndarray,
                        data: np.ndarray,
@@ -156,14 +164,14 @@ def _run_adaptive_teki(scenario: Scenario,
                        max_iter: int,
                        max_temp: float,
                        theta: float) -> CDict:
-    d = scenario.dim
+    d = prior_samps.shape[-1]
     d_y = len(data)
 
     sim_key, perturb_key = random.split(random_key)
     sim_keys = random.split(sim_key, max_iter)
     perturb_keys = random.split(perturb_key, max_iter)
 
-    simulate_data = vmap(lambda samp, key: scenario.simulate(samp, key))
+    simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
     def eki_body(previous_samps: CDict,
                  i: int) -> Tuple[CDict, int]:
@@ -228,24 +236,24 @@ def _run_adaptive_teki(scenario: Scenario,
     return samps
 
 
-def _run_adaptive_teki_termination_criterion(scenario: Scenario,
+def _run_adaptive_teki_termination_criterion(simulator: Callable,
                                              n_samps: int,
                                              random_key: np.ndarray,
                                              data: np.ndarray,
                                              prior_samps: np.ndarray,
                                              max_iter: int,
                                              termination_criterion: Callable[
-                                                 [Scenario, CDict, CDict, np.ndarray, np.ndarray],
+                                                 [CDict, CDict, np.ndarray, np.ndarray],
                                                  Tuple[CDict, CDict]],
                                              theta: float) -> CDict:
-    d = scenario.dim
+    d = prior_samps.shape[-1]
     d_y = len(data)
 
     sim_key, perturb_key = random.split(random_key)
     sim_keys = random.split(sim_key, max_iter)
     perturb_keys = random.split(perturb_key, max_iter)
 
-    simulate_data = vmap(lambda samp, key: scenario.simulate(samp, key))
+    simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
     def eki_body(previous_samps: CDict,
                  extra: CDict) -> Tuple[CDict, CDict]:
@@ -297,7 +305,7 @@ def _run_adaptive_teki_termination_criterion(scenario: Scenario,
 
         out_samps.temperature_schedule = new_temp
 
-        out_samps, extra = termination_criterion(scenario, out_samps, extra, simulated_data, stack_cov)
+        out_samps, extra = termination_criterion(out_samps, extra, simulated_data, stack_cov)
         return out_samps, extra
 
     initial_state = CDict(value=prior_samps, temperature_schedule=0.)
@@ -312,7 +320,7 @@ def _run_adaptive_teki_termination_criterion(scenario: Scenario,
     return samps
 
 
-def _run_adaptive_teki_ess(scenario: Scenario,
+def _run_adaptive_teki_ess(simulator: Callable,
                            n_samps: int,
                            random_key: np.ndarray,
                            data: np.ndarray,
@@ -323,14 +331,14 @@ def _run_adaptive_teki_ess(scenario: Scenario,
                            min_temp_increase: float,
                            max_bisection_iter: int,
                            bisection_tol: float) -> CDict:
-    d = scenario.dim
+    d = prior_samps.shape[-1]
     d_y = len(data)
 
     sim_key, perturb_key = random.split(random_key)
     sim_keys = random.split(sim_key, max_iter)
     perturb_keys = random.split(perturb_key, max_iter)
 
-    simulate_data = vmap(lambda samp, key: scenario.simulate(samp, key))
+    simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
     log_n_samp_threshold = np.log(n_samps * ess_threshold)
 
