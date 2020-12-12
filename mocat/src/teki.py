@@ -37,7 +37,7 @@ def run_tempered_ensemble_kalman_inversion(scenario: Union[Scenario, Callable],
     if isinstance(scenario, Scenario) and hasattr(scenario, 'simulate'):
         simulator = scenario.simulate
     elif isinstance(scenario, ABCScenario):
-        simulator = lambda x, r_key: scenario.summarise_data(scenario.simulate(x, r_key))
+        simulator = lambda x, r_key: scenario.summarise_data(scenario.simulate_data(x, r_key))
     else:
         simulator = scenario
 

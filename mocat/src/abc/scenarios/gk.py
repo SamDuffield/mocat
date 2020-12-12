@@ -16,7 +16,7 @@ buffer = 1e-5
 
 
 class GKUniformPrior(ABCScenario):
-    name = 'GK'
+    name = 'GK_old'
     dim = 4
 
     c = 0.8
@@ -46,7 +46,7 @@ class GKUniformPrior(ABCScenario):
 
 
 class GKTransformedUniformPrior(ABCScenario):
-    name = 'GK'
+    name = 'GK_old'
     dim = 4
 
     c = 0.8
@@ -83,7 +83,7 @@ class GKTransformedUniformPrior(ABCScenario):
 
 
 class GKOnlyAUniformPrior(ABCScenario):
-    name = 'GK only A'
+    name = 'GK_old only A'
     dim = 1
 
     B = 1.
@@ -116,7 +116,7 @@ class GKOnlyAUniformPrior(ABCScenario):
 
 
 class GKOnlyATransformedUniformPrior(ABCScenario):
-    name = 'GK only A'
+    name = 'GK_old only A'
     dim = 1
 
     B = 1.

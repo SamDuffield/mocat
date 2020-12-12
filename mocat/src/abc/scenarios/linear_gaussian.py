@@ -84,8 +84,7 @@ class LinearGaussian(ABCScenario):
                        data: np.ndarray) -> np.ndarray:
         return data
 
-    def simulate(self,
-                 x: np.ndarray,
-                 random_key: np.ndarray) -> np.ndarray:
+    def simulate_data(self,
+                      x: np.ndarray,
+                      random_key: np.ndarray) -> np.ndarray:
         return self.likelihood_sample(x, random_key)
-

@@ -12,7 +12,6 @@ from jax import numpy as np, random
 from mocat.src.abc.abc import ABCScenario
 from mocat.src.utils import _while_loop_stacked
 
-
 exponential_sample_buffer = 1e-6
 
 
@@ -29,7 +28,7 @@ def sir_single_step(carry: Tuple[np.ndarray, float], extra: Tuple[np.ndarray, in
 
     possibilities = np.array([[si[0] - 1, si[1] + 1],
                               [si[0], si[1] - 1]])
-    return (possibilities[random.choice(haz_key, 2, p=hazard_probs)], current_time + t_increment),\
+    return (possibilities[random.choice(haz_key, 2, p=hazard_probs)], current_time + t_increment), \
            (params, population_size, random_key)
 
 
@@ -94,4 +93,3 @@ class TransformedSIR(SIR):
                           x: np.ndarray,
                           random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return super().likelihood_sample(self.constrain(x), random_key)
-

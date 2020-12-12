@@ -12,7 +12,6 @@ from jax import numpy as np, random
 from mocat.src.abc.abc import ABCScenario
 from mocat.src.utils import _while_loop_stacked
 
-
 exponential_sample_buffer = 1e-6
 
 
@@ -69,15 +68,10 @@ class LotkaVolterra(ABCScenario):
                         x: np.ndarray) -> Union[float, np.ndarray]:
         return (self.prior_rates * x).sum()
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
+    def simulate_data(self,
+                      x: np.ndarray,
+                      random_key: np.ndarray) -> np.ndarray:
         return lotka_volterra_simulate(self.initial_prey_pred, self.times, x, random_key, max_iter=self.max_iter)[:, 0]
-
-    def simulate(self,
-                 x: np.ndarray,
-                 random_key: np.ndarray) -> np.ndarray:
-        return self.likelihood_sample(x, random_key)
 
 
 class TransformedLotkaVolterra(LotkaVolterra):
@@ -98,9 +92,7 @@ class TransformedLotkaVolterra(LotkaVolterra):
                         x: np.ndarray) -> Union[float, np.ndarray]:
         return (self.prior_rates * np.exp(x) - x).sum()
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
-        return np.log(super().likelihood_sample(self.constrain(x), random_key))
-
-
+    def simulate_data(self,
+                      x: np.ndarray,
+                      random_key: np.ndarray) -> np.ndarray:
+        return np.log(super().simulate_data(self.constrain(x), random_key))

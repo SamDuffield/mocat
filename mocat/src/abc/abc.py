@@ -36,7 +36,7 @@ class ABCScenario(Scenario):
     def likelihood_sample(self,
                           x: np.ndarray,
                           random_key: np.ndarray) -> np.ndarray:
-        raise NotImplementedError(f'{self.name} likelihood_sample not initiated')
+        raise AttributeError(f'{self.name} likelihood_sample not initiated')
 
     def simulate_data(self,
                       x: np.ndarray,
