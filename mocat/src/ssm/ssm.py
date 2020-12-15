@@ -13,7 +13,7 @@ from jax import vmap, grad, jit
 from jax.lax import scan
 from jax import random
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 
 
 class StateSpaceModel:
@@ -156,7 +156,7 @@ class StateSpaceModel:
 
     def simulate(self,
                  t_all: np.ndarray,
-                 random_key: np.ndarray) -> CDict:
+                 random_key: np.ndarray) -> cdict:
 
         len_t = len(t_all)
 
@@ -178,5 +178,5 @@ class StateSpaceModel:
 
         y = vmap(self.likelihood_sample)(x_all, t_all, obs_keys)
 
-        out_cdict = CDict(x=x_all, y=y, t=t_all, name=f'{self.name} sample')
+        out_cdict = cdict(x=x_all, y=y, t=t_all, name=f'{self.name} sample')
         return out_cdict

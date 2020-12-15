@@ -10,11 +10,11 @@ from typing import Union
 import jax.numpy as np
 from jax import jit, vmap
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 
 
-def ess(in_arg: Union[np.ndarray, CDict]) -> float:
-    if isinstance(in_arg, CDict) and hasattr(in_arg, 'in_arg'):
+def ess(in_arg: Union[np.ndarray, cdict]) -> float:
+    if isinstance(in_arg, cdict) and hasattr(in_arg, 'in_arg'):
         in_arg = in_arg.log_weights
 
     if in_arg.ndim > 1:

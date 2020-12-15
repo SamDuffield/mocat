@@ -13,7 +13,7 @@ from jax import random, vmap, jit
 from jax.lax import cond, scan
 from jax.ops import index_update
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src.ssm.ssm import StateSpaceModel
 from mocat.src.ssm._utils import ess
 
@@ -176,7 +176,7 @@ def initiate_particles(ssm_scenario: StateSpaceModel,
                        n: int,
                        random_key: np.ndarray,
                        y: np.ndarray = None,
-                       t: float = None) -> CDict:
+                       t: float = None) -> cdict:
     particle_filter.startup(ssm_scenario)
 
     sub_keys = random.split(random_key, n)
@@ -186,7 +186,7 @@ def initiate_particles(ssm_scenario: StateSpaceModel,
     if init_vals.ndim == 1:
         init_vals = init_vals[..., np.newaxis]
 
-    initial_sample = CDict(value=init_vals[np.newaxis],
+    initial_sample = cdict(value=init_vals[np.newaxis],
                            log_weights=init_log_weights[np.newaxis],
                            t=np.atleast_1d(t) if t is not None else np.zeros(1),
                            y=y[np.newaxis] if y is not None else None,
@@ -201,9 +201,9 @@ def _resample(x_w_r: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> Tuple[np.ndar
     return x[..., random.categorical(sub_key, log_weights, shape=(n,)), :], np.zeros(n), random_key
 
 
-def resample_particles(particles: CDict,
+def resample_particles(particles: cdict,
                        random_key: np.ndarray,
-                       resample_full: bool = True) -> CDict:
+                       resample_full: bool = True) -> cdict:
     out_particles = particles.copy()
     if out_particles.log_weights.ndim == 1:
         out_particles.value, out_particles.log_weights, _ = _resample((particles.value,
@@ -225,12 +225,12 @@ def resample_particles(particles: CDict,
 
 def propagate_particles(ssm_scenario: StateSpaceModel,
                         particle_filter: ParticleFilter,
-                        particles: CDict,
+                        particles: cdict,
                         y_new: np.ndarray,
                         t_new: float,
                         random_key: np.ndarray,
                         ess_threshold: float = 0.5,
-                        resample_full: bool = True) -> CDict:
+                        resample_full: bool = True) -> cdict:
     n = particles.value.shape[1]
     ess_previous = particles.ess[-1]
     out_particles = cond(ess_previous < ess_threshold * n,
@@ -264,8 +264,8 @@ def run_particle_filter_for_marginals(ssm_scenario: StateSpaceModel,
                                       t: np.ndarray,
                                       random_key: np.ndarray,
                                       n: int = None,
-                                      initial_sample: CDict = None,
-                                      ess_threshold: float = 0.5) -> CDict:
+                                      initial_sample: cdict = None,
+                                      ess_threshold: float = 0.5) -> cdict:
     if y.ndim == 1:
         y = y[..., np.newaxis]
 
@@ -283,8 +283,8 @@ def run_particle_filter_for_marginals(ssm_scenario: StateSpaceModel,
     num_propagate_steps = len(y)
     int_rand_keys = random.split(random_key, num_propagate_steps)
 
-    def particle_filter_body(samps_previous: CDict,
-                             iter_ind: int) -> Tuple[CDict, CDict]:
+    def particle_filter_body(samps_previous: cdict,
+                             iter_ind: int) -> Tuple[cdict, cdict]:
         x_previous = samps_previous.value
         log_weights_previous = samps_previous.log_weights
         int_rand_key = int_rand_keys[iter_ind]

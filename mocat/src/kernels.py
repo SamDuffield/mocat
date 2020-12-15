@@ -11,14 +11,14 @@ from functools import partial
 import jax.numpy as np
 from jax import jit
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 
 
 class Kernel:
 
     def __init__(self, **kwargs):
         if not hasattr(self, 'parameters'):
-            self.parameters = CDict()
+            self.parameters = cdict()
         self.parameters.__dict__.update(kwargs)
 
     def __repr__(self):

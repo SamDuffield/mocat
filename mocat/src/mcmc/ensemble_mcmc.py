@@ -14,7 +14,7 @@ from jax.ops import index_update
 
 from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src import utils
-from mocat.src.core import Scenario, CDict
+from mocat.src.core import Scenario, cdict
 from mocat.src.mcmc.corrections import Metropolis
 
 
@@ -37,20 +37,20 @@ class EnsembleRWMH(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         _, initial_extra = super().startup(scenario, False, initial_extra, random_key)
         if initial_state is None:
             random_key, sub_key = random.split(random_key)
             x0 = random.normal(sub_key, shape=(self.parameters.n_ensemble, scenario.dim))
-            initial_state = CDict(value=x0)
+            initial_state = cdict(value=x0)
         return initial_state, initial_extra
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -80,8 +80,8 @@ class EnsembleRWMH(MCMCSampler):
 
     def acceptance_probability(self,
                                scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         ensemble_index = reject_extra.iter % self.parameters.n_ensemble
         return np.minimum(1., np.exp(- proposed_state.potential[ensemble_index]
                                      + reject_state.potential[ensemble_index]))
@@ -106,22 +106,22 @@ class EnsembleOverdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         _, initial_extra = super().startup(scenario, False, initial_extra, random_key)
         if initial_state is None:
             random_key, sub_key = random.split(random_key)
             x0 = random.normal(sub_key, shape=(self.parameters.n_ensemble, scenario.dim))
-            initial_state = CDict(value=x0)
+            initial_state = cdict(value=x0)
         initial_state.grad_potential = vmap(scenario.grad_potential)(initial_state.value)
         initial_state, initial_extra = self.always(scenario, initial_state, initial_extra)
         return initial_state, initial_extra
 
     def always(self,
                scenario: Scenario,
-               reject_state: CDict,
-               reject_extra: CDict) -> Tuple[CDict, CDict]:
+               reject_state: cdict,
+               reject_extra: cdict) -> Tuple[cdict, cdict]:
         d = scenario.dim
         n_ensemble = self.parameters.n_ensemble
         ensemble = reject_state.value
@@ -142,8 +142,8 @@ class EnsembleOverdamped(MCMCSampler):
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -173,8 +173,8 @@ class EnsembleOverdamped(MCMCSampler):
 
     def proposal_potential(self,
                            scenario: Scenario,
-                           reject_state: CDict, reject_extra: CDict,
-                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                           reject_state: cdict, reject_extra: cdict,
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         ensemble_index = reject_extra.iter % self.parameters.n_ensemble
         stepsize = reject_extra.parameters.stepsize
         leave_one_out_cov = reject_extra.leave_one_out_cov
@@ -188,8 +188,8 @@ class EnsembleOverdamped(MCMCSampler):
 
     def acceptance_probability(self,
                                scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         ensemble_index = reject_extra.iter % self.parameters.n_ensemble
 
         pre_min_alpha = np.exp(- proposed_state.potential[ensemble_index]

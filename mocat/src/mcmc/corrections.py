@@ -12,7 +12,7 @@ from jax import random, vmap, numpy as np
 from jax.lax import cond
 from jax.ops import index_update
 
-from mocat.src.core import CDict, Scenario
+from mocat.src.core import cdict, Scenario
 from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src.abc.abc import ABCSampler
 
@@ -28,26 +28,26 @@ class Correction:
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                initial_state: CDict,
-                inital_extra: CDict) -> Tuple[CDict, CDict]:
+                initial_state: cdict,
+                inital_extra: cdict) -> Tuple[cdict, cdict]:
         return initial_state, inital_extra
 
     def correct(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                reject_state: CDict,
-                reject_extra: CDict,
-                proposed_state: CDict,
-                proposed_extra: CDict) -> Tuple[CDict, CDict]:
+                reject_state: cdict,
+                reject_extra: cdict,
+                proposed_state: cdict,
+                proposed_extra: cdict) -> Tuple[cdict, cdict]:
         raise NotImplementedError
 
     def __call__(self,
                  scenario: Scenario,
                  sampler: MCMCSampler,
-                 reject_state: CDict,
-                 reject_extra: CDict,
-                 proposed_state: CDict,
-                 proposed_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict,
+                 proposed_state: cdict,
+                 proposed_extra: cdict) -> Tuple[cdict, cdict]:
         return self.correct(scenario, sampler,
                             reject_state, reject_extra,
                             proposed_state, proposed_extra)
@@ -58,23 +58,23 @@ class Uncorrected(Correction):
     def correct(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                reject_state: CDict,
-                reject_extra: CDict,
-                proposed_state: CDict,
-                proposed_extra: CDict) -> Tuple[CDict, CDict]:
+                reject_state: cdict,
+                reject_extra: cdict,
+                proposed_state: cdict,
+                proposed_extra: cdict) -> Tuple[cdict, cdict]:
         return proposed_state, proposed_extra
 
 
 def update_prior_potential(scenario: Scenario,
-                           state: CDict,
-                           extra: CDict) -> CDict:
+                           state: cdict,
+                           extra: cdict) -> cdict:
     state.prior_potential = scenario.prior_potential(state.value)
     return state
 
 
 def update_ensemble_potential(scenario: Scenario,
-                              state: CDict,
-                              extra: CDict) -> CDict:
+                              state: cdict,
+                              extra: cdict) -> cdict:
     ensemble_index = extra.iter % extra.parameters.n_ensemble
     state.potential = index_update(state.potential, ensemble_index,
                                    scenario.potential(state.value[ensemble_index]))
@@ -82,8 +82,8 @@ def update_ensemble_potential(scenario: Scenario,
 
 
 def update_potential(scenario: Scenario,
-                     state: CDict,
-                     extra: CDict) -> CDict:
+                     state: cdict,
+                     extra: cdict) -> cdict:
     state.potential = scenario.potential(state.value)
     return state
 
@@ -97,8 +97,8 @@ class Metropolis(Correction):
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                initial_state: CDict,
-                initial_extra: CDict) -> Tuple[CDict, CDict]:
+                initial_state: cdict,
+                initial_extra: cdict) -> Tuple[cdict, cdict]:
         initial_state.alpha = 1.
 
         if isinstance(sampler, ABCSampler):
@@ -115,10 +115,10 @@ class Metropolis(Correction):
     def correct(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                reject_state: CDict,
-                reject_extra: CDict,
-                proposed_state: CDict,
-                proposed_extra: CDict) -> Tuple[CDict, CDict]:
+                reject_state: cdict,
+                reject_extra: cdict,
+                proposed_state: cdict,
+                proposed_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = self._update_potential(scenario, proposed_state, proposed_extra)
 
         alpha = sampler.acceptance_probability(scenario,
@@ -160,8 +160,8 @@ class RMMetropolis(Correction):
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                initial_state: CDict,
-                initial_extra: CDict) -> Tuple[CDict, CDict]:
+                initial_state: cdict,
+                initial_extra: cdict) -> Tuple[cdict, cdict]:
         # Set tuning parameter (i.e. stepsize) to 2.38^2/d if not initiated and adaptive
         if hasattr(sampler.parameters, sampler.tuning.parameter) \
                 and getattr(sampler.parameters, sampler.tuning.parameter) is None:
@@ -183,10 +183,10 @@ class RMMetropolis(Correction):
     def correct(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
-                reject_state: CDict,
-                reject_extra: CDict,
-                proposed_state: CDict,
-                proposed_extra: CDict) -> Tuple[CDict, CDict]:
+                reject_state: cdict,
+                reject_extra: cdict,
+                proposed_state: cdict,
+                proposed_extra: cdict) -> Tuple[cdict, cdict]:
         corrected_state, corrected_extra = self.super_correction.correct(scenario, sampler,
                                                                          reject_state, reject_extra,
                                                                          proposed_state, proposed_extra)
@@ -201,8 +201,8 @@ class RMMetropolis(Correction):
         return adapted_state, adapted_extra
 
     def adapt(self,
-              state: CDict,
-              extra: CDict) -> Tuple[CDict, CDict]:
+              state: cdict,
+              extra: cdict) -> Tuple[cdict, cdict]:
         param = extra.parameters.__dict__[self.tuning.parameter]
         param = self._param_update(param, getattr(state, self.tuning.metric),
                                    self.tuning.target, self.tuning.monotonicity,

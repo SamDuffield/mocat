@@ -13,8 +13,8 @@ import numpy.testing as npt
 from mocat.src import core
 
 
-class TestCDict(unittest.TestCase):
-    cdict = core.CDict(test_arr=np.ones((10, 3)),
+class Testcdict(unittest.TestCase):
+    cdict = core.cdict(test_arr=np.ones((10, 3)),
                        test_float=3.)
 
     def test_init(self):
@@ -26,7 +26,7 @@ class TestCDict(unittest.TestCase):
 
     def test_copy(self):
         cdict2 = self.cdict.copy()
-        npt.assert_(isinstance(cdict2, core.CDict))
+        npt.assert_(isinstance(cdict2, core.cdict))
 
         npt.assert_(isinstance(cdict2.test_arr, np.DeviceArray))
         npt.assert_array_equal(cdict2.test_arr, np.ones((10, 3)))
@@ -42,7 +42,7 @@ class TestCDict(unittest.TestCase):
 
     def test_getitem(self):
         cdict_0get = self.cdict[0]
-        npt.assert_(isinstance(cdict_0get, core.CDict))
+        npt.assert_(isinstance(cdict_0get, core.cdict))
 
         npt.assert_(isinstance(cdict_0get.test_arr, np.DeviceArray))
         npt.assert_array_equal(cdict_0get.test_arr, np.ones(3))
@@ -51,7 +51,7 @@ class TestCDict(unittest.TestCase):
         npt.assert_equal(cdict_0get.test_float, 3.)
 
     def test_additem(self):
-        cdict_other = core.CDict(test_arr=np.ones((2, 3)),
+        cdict_other = core.cdict(test_arr=np.ones((2, 3)),
                                  test_float=7.,
                                  time=25.)
 
@@ -59,7 +59,7 @@ class TestCDict(unittest.TestCase):
 
         cdict_add = self.cdict + cdict_other
 
-        npt.assert_(isinstance(cdict_add, core.CDict))
+        npt.assert_(isinstance(cdict_add, core.cdict))
 
         npt.assert_(isinstance(cdict_add.test_arr, np.DeviceArray))
         npt.assert_array_equal(cdict_add.test_arr, np.ones((12, 3)))

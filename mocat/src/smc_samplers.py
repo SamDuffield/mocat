@@ -12,7 +12,7 @@ from jax import numpy as np, jit, random, vmap, grad
 from jax.lax import scan
 from jax.scipy.special import logsumexp
 
-from mocat.src.core import Scenario, CDict
+from mocat.src.core import Scenario, cdict
 from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src.mcmc.corrections import Correction, Metropolis
 from mocat.src.mcmc.run import startup_mcmc, check_correction
@@ -123,20 +123,20 @@ class IQInterpolate(Scheduler):
                                       + np.exp(0.5 * shifted_target_potential_evals))))
 
 
-def default_post_mcmc_update(previous_full_state: CDict,
-                             previous_full_extra: CDict,
-                             new_enlarged_state: CDict,
-                             new_enlarged_extra: CDict) -> Tuple[CDict, CDict]:
+def default_post_mcmc_update(previous_full_state: cdict,
+                             previous_full_extra: cdict,
+                             new_enlarged_state: cdict,
+                             new_enlarged_extra: cdict) -> Tuple[cdict, cdict]:
     new_full_state = new_enlarged_state[:, -1]
     new_full_extra = new_enlarged_extra[:, -1]
     new_full_extra.parameters = new_full_extra.parameters[:, -1]
     return new_full_state, new_full_extra
 
 
-def default_post_metropolis_mcmc_update(previous_full_state: CDict,
-                                        previous_full_extra: CDict,
-                                        new_enlarged_state: CDict,
-                                        new_enlarged_extra: CDict) -> Tuple[CDict, CDict]:
+def default_post_metropolis_mcmc_update(previous_full_state: cdict,
+                                        previous_full_extra: cdict,
+                                        new_enlarged_state: cdict,
+                                        new_enlarged_extra: cdict) -> Tuple[cdict, cdict]:
     new_full_state = new_enlarged_state[:, -1]
     new_full_extra = new_enlarged_extra[:, -1]
     new_full_extra.parameters = new_full_extra.parameters[:, -1]
@@ -152,7 +152,7 @@ def run_smc_sampler(scenario: Scenario,
                     mcmc_steps: int = 20,
                     scheduler: Scheduler = None,
                     preschedule: np.ndarray = None,
-                    initial_state: CDict = None,
+                    initial_state: cdict = None,
                     initial_potential_func: Callable = None,
                     initial_grad_potential_func: Callable = None,
                     post_mcmc_update: Callable = None,
@@ -161,7 +161,7 @@ def run_smc_sampler(scenario: Scenario,
                     max_extend_multiplier: float = np.inf,
                     bisection_tol: float = 1e-5,
                     max_bisection_iter: int = 1000,
-                    name: str = None) -> CDict:
+                    name: str = None) -> cdict:
     if initial_state is not None and initial_potential_func is None:
         raise ValueError('Found initial_state but not initial_potential_func')
 
@@ -173,12 +173,12 @@ def run_smc_sampler(scenario: Scenario,
     if initial_state is None:
         random_key, sub_key = random.split(random_key)
         x0 = random.normal(sub_key, shape=(n_samps, scenario.dim))
-        initial_state = CDict(value=x0)
+        initial_state = cdict(value=x0)
 
         initial_potential_func = gaussian_potential
         initial_grad_potential_func = lambda x: x
 
-    initial_extra = CDict(random_key=None,
+    initial_extra = cdict(random_key=None,
                           iter=1)
 
     if scheduler is None:
@@ -234,10 +234,10 @@ def _run_prescheduled_smc_sampler(scenario: Scenario,
                                   mcmc_steps: int,
                                   scheduler: Scheduler,
                                   preschedule: np.ndarray,
-                                  initial_state: CDict,
-                                  initial_extra: CDict,
+                                  initial_state: cdict,
+                                  initial_extra: cdict,
                                   initial_potential_func: Callable,
-                                  post_mcmc_update: Callable) -> CDict:
+                                  post_mcmc_update: Callable) -> cdict:
     initial_state.weight_schedule = 0.
 
     initial_potential_vec = vmap(initial_potential_func)
@@ -249,8 +249,8 @@ def _run_prescheduled_smc_sampler(scenario: Scenario,
                                                    mcmc_steps,
                                                    post_mcmc_update)
 
-    def prescheduled_smc_kernel(previous_carry: Tuple[CDict, CDict],
-                                iter_ind: int) -> Tuple[Tuple[CDict, CDict], CDict]:
+    def prescheduled_smc_kernel(previous_carry: Tuple[cdict, cdict],
+                                iter_ind: int) -> Tuple[Tuple[cdict, cdict], cdict]:
         previous_state, previous_extra = previous_carry
 
         previous_schedule_param = preschedule[iter_ind - 1]
@@ -278,15 +278,15 @@ def _run_adaptive_smc_sampler(scenario: Scenario,
                               mcmc_correction: Correction,
                               mcmc_steps: int,
                               scheduler: Scheduler,
-                              initial_state: CDict,
-                              initial_extra: CDict,
+                              initial_state: cdict,
+                              initial_extra: cdict,
                               initial_potential_func: Callable,
                               post_mcmc_update: Callable,
                               max_iter: int,
                               ess_threshold: float,
                               max_extend_multiplier: float,
                               bisection_tol: float,
-                              max_bisection_iter: int) -> CDict:
+                              max_bisection_iter: int) -> cdict:
     n_samps = initial_state.value.shape[-2]
     max_extend_multiplier = np.where(max_extend_multiplier == np.inf, 1e32, max_extend_multiplier)
 
@@ -314,9 +314,9 @@ def _run_adaptive_smc_sampler(scenario: Scenario,
         return 2 * logsumexp(log_weights) - logsumexp(2 * log_weights)
 
     @jit
-    def adaptive_smc_kernel(previous_state: CDict,
-                            previous_full_extra: Tuple[CDict, np.ndarray, np.ndarray]) \
-            -> Tuple[CDict, Tuple[CDict, np.ndarray, np.ndarray]]:
+    def adaptive_smc_kernel(previous_state: cdict,
+                            previous_full_extra: Tuple[cdict, np.ndarray, np.ndarray]) \
+            -> Tuple[cdict, Tuple[cdict, np.ndarray, np.ndarray]]:
         previous_extra, previous_initial_potential_evals, previous_target_potential_evals = previous_full_extra
 
         previous_schedule_param = previous_state.weight_schedule
@@ -368,8 +368,8 @@ def init_smc_sampler_advance(scheduler: Scheduler,
                              mcmc_steps: int,
                              post_mcmc_update: Callable) -> Callable:
     # Move
-    def mcmc_kernel(previous_carry: Tuple[CDict, CDict],
-                    _: Any) -> Tuple[Tuple[CDict, CDict], Tuple[CDict, CDict]]:
+    def mcmc_kernel(previous_carry: Tuple[cdict, cdict],
+                    _: Any) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict]]:
         previous_state, previous_extra = previous_carry
         reject_state = previous_state.copy()
         reject_extra = previous_extra.copy()
@@ -389,8 +389,8 @@ def init_smc_sampler_advance(scheduler: Scheduler,
 
         return (corrected_state, corrected_extra), (corrected_state, corrected_extra)
 
-    def mcmc_chain(start_state: CDict,
-                   start_extra: CDict):
+    def mcmc_chain(start_state: cdict,
+                   start_extra: cdict):
         start_state, start_extra = startup_mcmc(scheduler.scheduled_scenario,
                                                 mcmc_sampler,
                                                 None,
@@ -406,12 +406,12 @@ def init_smc_sampler_advance(scheduler: Scheduler,
 
     mcmc_chains_vec = vmap(mcmc_chain)
 
-    def smc_sampler_advance(previous_full_state: CDict,
-                            previous_full_extra: CDict,
+    def smc_sampler_advance(previous_full_state: cdict,
+                            previous_full_extra: cdict,
                             previous_schedule_param: float,
                             new_schedule_param: float,
                             previous_initial_potential_evals: np.ndarray,
-                            previous_target_potential_evals: np.ndarray) -> Tuple[CDict, CDict]:
+                            previous_target_potential_evals: np.ndarray) -> Tuple[cdict, cdict]:
         if hasattr(previous_full_state, 'weight_schedule'):
             del previous_full_state.weight_schedule
         new_full_state = previous_full_state.copy()

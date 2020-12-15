@@ -8,7 +8,7 @@
 from typing import Union, Tuple
 
 from jax import numpy as np, random, vmap, jit
-from mocat.src.core import CDict, Scenario
+from mocat.src.core import cdict, Scenario
 from mocat.src.mcmc.sampler import MCMCSampler
 
 
@@ -70,53 +70,57 @@ class ABCSampler(MCMCSampler):
 
     def startup(self,
                 abc_scenario: ABCScenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         if abc_scenario.summary_statistic is None:
             abc_scenario.summary_statistic = abc_scenario.summarise_data(abc_scenario.data)
 
         if initial_state is None:
             x0 = np.zeros(abc_scenario.dim)
             random_key, subkey = random.split(random_key)
-            initial_state = CDict(value=x0)
+            initial_state = cdict(value=x0)
 
         if initial_extra is None:
-            initial_extra = CDict(random_key=random_key,
+            initial_extra = cdict(random_key=random_key,
                                   iter=0)
         if hasattr(self, 'parameters'):
             initial_extra.parameters = self.parameters.copy()
 
-        initial_state.prior_potential = abc_scenario.prior_potential(initial_state.value)
+        if not hasattr(initial_state, 'prior_potential'):
+            initial_state.prior_potential = abc_scenario.prior_potential(initial_state.value)
 
-        initial_extra.random_key, subkey = random.split(initial_extra.random_key)
-        initial_extra.simulated_summary = self.simulate_summary(abc_scenario, initial_state.value, subkey)
-        initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_summary)
+        if not hasattr(initial_state, 'simulated_summary'):
+            initial_extra.random_key, subkey = random.split(initial_extra.random_key)
+            initial_extra.simulated_summary = self.simulate_summary(abc_scenario, initial_state.value, subkey)
+
+        if not hasattr(initial_state, 'distance'):
+            initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_summary)
         return initial_state, initial_extra
 
     def always(self,
                abc_scenario: ABCScenario,
-               reject_state: CDict,
-               reject_extra: CDict) -> Tuple[CDict, CDict]:
+               reject_state: cdict,
+               reject_extra: cdict) -> Tuple[cdict, cdict]:
         reject_extra.random_key, _ = random.split(reject_extra.random_key)
         return reject_state, reject_extra
 
     def proposal(self,
                  abc_scenario: ABCScenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         raise NotImplementedError(f'{self.__class__.__name__} markov proposal not initiated')
 
     def proposal_potential(self,
                            abc_scenario: ABCScenario,
-                           reject_state: CDict, reject_extra: CDict,
-                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                           reject_state: cdict, reject_extra: cdict,
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} proposal_potential not initiated')
 
     def acceptance_probability(self,
                                abc_scenario: ABCScenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} acceptance_probability not initiated')
 
     def simulate_summary(self,

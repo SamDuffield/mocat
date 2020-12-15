@@ -14,7 +14,7 @@ from jax import numpy as np, random, vmap
 from jax.lax import scan
 from jax.scipy.special import logsumexp
 
-from mocat.src.core import CDict, Scenario
+from mocat.src.core import cdict, Scenario
 from mocat.src.abc.abc import ABCScenario
 from mocat.src.utils import while_loop_stacked, bisect
 
@@ -33,7 +33,7 @@ def run_tempered_ensemble_kalman_inversion(scenario: Union[Scenario, Callable],
                                            min_temp_increase: float = 0.01,
                                            max_bisection_iter: int = 1000,
                                            bisection_tol: float = 1e-5,
-                                           name: str = None) -> CDict:
+                                           name: str = None) -> cdict:
     if isinstance(scenario, Scenario) and hasattr(scenario, 'simulate'):
         simulator = scenario.simulate
     elif isinstance(scenario, ABCScenario):
@@ -82,7 +82,7 @@ def run_tempered_ensemble_kalman_inversion(scenario: Union[Scenario, Callable],
         name = scenario.name + ": TEKI"
 
     samps.name = name
-    samps.run_params = CDict(max_iter=max_iter, max_temp=max_temp, theta=theta,
+    samps.run_params = cdict(max_iter=max_iter, max_temp=max_temp, theta=theta,
                              ess_threshold=ess_threshold,
                              min_temp_increase=min_temp_increase, max_bisection_iter=max_bisection_iter,
                              bisection_tol=bisection_tol)
@@ -94,7 +94,7 @@ def _run_presheduled_teki(simulator: Callable,
                           random_key: np.ndarray,
                           data: np.ndarray,
                           prior_samps: np.ndarray,
-                          temperature_schedule: np.ndarray) -> CDict:
+                          temperature_schedule: np.ndarray) -> cdict:
     d = prior_samps.shape[-1]
     d_y = len(data)
 
@@ -106,8 +106,8 @@ def _run_presheduled_teki(simulator: Callable,
 
     simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
-    def eki_body(previous_samps: CDict,
-                 i: int) -> Tuple[CDict, CDict]:
+    def eki_body(previous_samps: cdict,
+                 i: int) -> Tuple[cdict, cdict]:
         out_samps = previous_samps.copy()
         data_samp_keys = random.split(sim_keys[i], n_samps)
 
@@ -146,7 +146,7 @@ def _run_presheduled_teki(simulator: Callable,
                              @ tempered_kalman_gain.T)
         return out_samps, out_samps
 
-    initial_state = CDict(value=prior_samps)
+    initial_state = cdict(value=prior_samps)
     final_samp, samps = scan(eki_body,
                              initial_state,
                              np.arange(1, n_iter))
@@ -163,7 +163,7 @@ def _run_adaptive_teki(simulator: Callable,
                        prior_samps: np.ndarray,
                        max_iter: int,
                        max_temp: float,
-                       theta: float) -> CDict:
+                       theta: float) -> cdict:
     d = prior_samps.shape[-1]
     d_y = len(data)
 
@@ -173,8 +173,8 @@ def _run_adaptive_teki(simulator: Callable,
 
     simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
-    def eki_body(previous_samps: CDict,
-                 i: int) -> Tuple[CDict, int]:
+    def eki_body(previous_samps: cdict,
+                 i: int) -> Tuple[cdict, int]:
         i = i + 1
         out_samps = previous_samps.copy()
         data_samp_keys = random.split(sim_keys[i], n_samps)
@@ -225,7 +225,7 @@ def _run_adaptive_teki(simulator: Callable,
         out_samps.temperature_schedule = new_temp
         return out_samps, i
 
-    initial_state = CDict(value=prior_samps, temperature_schedule=0.)
+    initial_state = cdict(value=prior_samps, temperature_schedule=0.)
     samps = while_loop_stacked(lambda state, extra: state.temperature_schedule < max_temp,
                                eki_body,
                                (initial_state, 0),
@@ -243,9 +243,9 @@ def _run_adaptive_teki_termination_criterion(simulator: Callable,
                                              prior_samps: np.ndarray,
                                              max_iter: int,
                                              termination_criterion: Callable[
-                                                 [CDict, CDict, np.ndarray, np.ndarray],
-                                                 Tuple[CDict, CDict]],
-                                             theta: float) -> CDict:
+                                                 [cdict, cdict, np.ndarray, np.ndarray],
+                                                 Tuple[cdict, cdict]],
+                                             theta: float) -> cdict:
     d = prior_samps.shape[-1]
     d_y = len(data)
 
@@ -255,8 +255,8 @@ def _run_adaptive_teki_termination_criterion(simulator: Callable,
 
     simulate_data = vmap(lambda samp, key: simulator(samp, key))
 
-    def eki_body(previous_samps: CDict,
-                 extra: CDict) -> Tuple[CDict, CDict]:
+    def eki_body(previous_samps: cdict,
+                 extra: cdict) -> Tuple[cdict, cdict]:
         extra.i = extra.i + 1
         out_samps = previous_samps.copy()
         data_samp_keys = random.split(sim_keys[extra.i], n_samps)
@@ -308,8 +308,8 @@ def _run_adaptive_teki_termination_criterion(simulator: Callable,
         out_samps, extra = termination_criterion(out_samps, extra, simulated_data, stack_cov)
         return out_samps, extra
 
-    initial_state = CDict(value=prior_samps, temperature_schedule=0.)
-    initial_extra = CDict(i=0, terminate=False)
+    initial_state = cdict(value=prior_samps, temperature_schedule=0.)
+    initial_extra = cdict(i=0, terminate=False)
     samps = while_loop_stacked(lambda state, extra: extra.terminate,
                                eki_body,
                                (initial_state, initial_extra),
@@ -330,7 +330,7 @@ def _run_adaptive_teki_ess(simulator: Callable,
                            ess_threshold: float,
                            min_temp_increase: float,
                            max_bisection_iter: int,
-                           bisection_tol: float) -> CDict:
+                           bisection_tol: float) -> cdict:
     d = prior_samps.shape[-1]
     d_y = len(data)
 
@@ -348,8 +348,8 @@ def _run_adaptive_teki_ess(simulator: Callable,
         log_weights = -0.5 * (new_temp - previous_temp) * data_dispersion
         return 2 * logsumexp(log_weights) - logsumexp(2 * log_weights)
 
-    def eki_body(previous_samps: CDict,
-                 i: int) -> Tuple[CDict, int]:
+    def eki_body(previous_samps: cdict,
+                 i: int) -> Tuple[cdict, int]:
         i = i + 1
         out_samps = previous_samps.copy()
         data_samp_keys = random.split(sim_keys[i], n_samps)
@@ -407,7 +407,7 @@ def _run_adaptive_teki_ess(simulator: Callable,
         out_samps.temperature_schedule = new_temp
         return out_samps, i
 
-    initial_state = CDict(value=prior_samps, temperature_schedule=0.)
+    initial_state = cdict(value=prior_samps, temperature_schedule=0.)
     samps = while_loop_stacked(lambda state, extra: state.temperature_schedule < max_temp,
                                eki_body,
                                (initial_state, 0),

@@ -12,7 +12,7 @@ from inspect import isclass
 from jax import numpy as np, jit
 from jax.lax import scan
 
-from mocat.src.core import Scenario, CDict
+from mocat.src.core import Scenario, cdict
 from mocat.src.mcmc.corrections import Correction, Uncorrected
 from mocat.src.mcmc.sampler import MCMCSampler
 
@@ -49,8 +49,8 @@ def startup_mcmc(scenario: Scenario,
                  sampler: MCMCSampler,
                  random_key: Union[None, np.ndarray],
                  correction: Union[None, str, Correction, Type[Correction]],
-                 initial_state: CDict = None,
-                 initial_extra: CDict = None) -> Tuple[CDict, CDict]:
+                 initial_state: cdict = None,
+                 initial_extra: cdict = None) -> Tuple[cdict, cdict]:
     # Startup
     initial_state, initial_extra = sampler.startup(scenario, initial_state, initial_extra, random_key)
     initial_state, initial_extra = correction.startup(scenario, sampler, initial_state, initial_extra)
@@ -67,9 +67,9 @@ def startup_mcmc(scenario: Scenario,
 
 def mcmc_run_params(sampler: MCMCSampler,
                     correction: Correction,
-                    initial_state: CDict,
-                    initial_extra: CDict) -> CDict:
-    return CDict(name=sampler.name,
+                    initial_state: cdict,
+                    initial_extra: cdict) -> cdict:
+    return cdict(name=sampler.name,
                  parameters=sampler.parameters.copy(),
                  correction=correction.__class__.__name__,
                  tuning=sampler.tuning,
@@ -82,11 +82,11 @@ def run_mcmc(scenario: Scenario,
              n: int,
              random_key: Union[None, np.ndarray],
              correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
-             initial_state: CDict = None,
-             initial_extra: CDict = None,
+             initial_state: cdict = None,
+             initial_extra: cdict = None,
              name: str = None,
              return_random_key: bool = False,
-             **kwargs) -> Union[CDict, Tuple[CDict, np.ndarray]]:
+             **kwargs) -> Union[cdict, Tuple[cdict, np.ndarray]]:
     sampler, correction = check_correction(sampler, correction, **kwargs)
     initial_state, initial_extra = startup_mcmc(scenario, sampler, random_key, correction, initial_state, initial_extra)
     run_params = mcmc_run_params(sampler, correction, initial_state, initial_extra)
@@ -95,8 +95,8 @@ def run_mcmc(scenario: Scenario,
         raise ValueError(f'None found in {sampler.name}.parameters: \n{sampler.parameters}')
 
     @jit
-    def markov_kernel(previous_carry: Tuple[CDict, CDict],
-                      _: Any) -> Tuple[Tuple[CDict, CDict], CDict]:
+    def markov_kernel(previous_carry: Tuple[cdict, cdict],
+                      _: Any) -> Tuple[Tuple[cdict, cdict], cdict]:
         previous_state, previous_extra = previous_carry
         reject_state = previous_state.copy()
         reject_extra = previous_extra.copy()

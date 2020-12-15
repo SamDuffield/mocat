@@ -11,7 +11,7 @@ import jax.numpy as np
 import numpy.testing as npt
 
 from mocat.src import utils
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 
 
 class TestLeaveOneOut(unittest.TestCase):
@@ -75,7 +75,7 @@ class TestGaussianPotential(unittest.TestCase):
 
 class TestLeapfrog(unittest.TestCase):
 
-    start_state = CDict(value=np.zeros(2),
+    start_state = cdict(value=np.zeros(2),
                         grad_potential=np.array([1., 2.]),
                         momenta=np.ones(2))
 

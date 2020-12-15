@@ -12,7 +12,7 @@ from functools import partial
 from jax import numpy as np, random, vmap, jit
 from jax.lax import while_loop, scan, cond, map
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src.ssm.ssm import StateSpaceModel
 from mocat.src.ssm.filters import ParticleFilter, run_particle_filter_for_marginals
 
@@ -173,12 +173,12 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
 
 @partial(jit, static_argnums=(0, 3))
 def backward_simulation(ssm_scenario: StateSpaceModel,
-                        marginal_particles: CDict,
+                        marginal_particles: cdict,
                         random_key: np.ndarray,
                         n_samps: int,
                         maximum_rejections: int,
                         init_bound_param: float,
-                        bound_inflation: float) -> CDict:
+                        bound_inflation: float) -> cdict:
     marg_particles_vals = marginal_particles.value
     times = marginal_particles.t
     marginal_log_weights = marginal_particles.log_weights
@@ -213,9 +213,9 @@ def backward_simulation(ssm_scenario: StateSpaceModel,
 
 @partial(jit, static_argnums=(0, 3))
 def backward_simulation_full(ssm_scenario: StateSpaceModel,
-                             marginal_particles: CDict,
+                             marginal_particles: cdict,
                              random_key: np.ndarray,
-                             n_samps: int) -> CDict:
+                             n_samps: int) -> cdict:
     marg_particles_vals = marginal_particles.value
     times = marginal_particles.t
     marginal_log_weights = marginal_particles.log_weights
@@ -253,7 +253,7 @@ def forward_filtering_backward_simulation(ssm_scenario: StateSpaceModel,
                                           ess_threshold: float = 0.5,
                                           maximum_rejections: int = 0,
                                           transition_dens_bound_parameter: float = 0.,
-                                          bound_inflation: float = 1.01) -> CDict:
+                                          bound_inflation: float = 1.01) -> cdict:
     pf_key, bsi_key = random.split(random_key)
 
     if n_pf is None:

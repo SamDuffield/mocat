@@ -12,13 +12,13 @@ from jax import random
 import numpy.testing as npt
 
 from mocat.src.mcmc import metrics
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src import kernels
 
 
-class TestIsCdict(unittest.TestCase):
+class TestIscdict(unittest.TestCase):
     arr = np.arange(20).reshape(10, 2)
-    cdict = CDict(value=arr)
+    cdict = cdict(value=arr)
 
     def test_array(self):
         out_bool = metrics._is_cdict(self.arr)
@@ -43,9 +43,9 @@ class TestAcceptanceRate(unittest.TestCase):
     all_accept_arr = np.arange(1, 21).reshape(10, 2)
     mixed_arr = np.concatenate([all_reject_arr, all_accept_arr])
 
-    all_accept_cdict = CDict(value=all_accept_arr)
-    all_reject_cdict = CDict(value=all_reject_arr)
-    mixed_cdict = CDict(value=mixed_arr)
+    all_accept_cdict = cdict(value=all_accept_arr)
+    all_reject_cdict = cdict(value=all_reject_arr)
+    mixed_cdict = cdict(value=mixed_arr)
 
     all_accept_cdict.alpha = np.ones(len(all_accept_arr))
     all_reject_cdict.alpha = np.zeros(len(all_reject_arr))
@@ -103,14 +103,14 @@ class TestAutocorrelation(unittest.TestCase):
 
     key = random.PRNGKey(0)
     ind_draws_arr = random.normal(key, (100,))
-    ind_draws_cdict = CDict(value=ind_draws_arr)
+    ind_draws_cdict = cdict(value=ind_draws_arr)
 
     corr_draws_arr = 0.1 * np.cumsum(ind_draws_arr)
-    corr_draws_cdict = CDict(value=corr_draws_arr)
+    corr_draws_cdict = cdict(value=corr_draws_arr)
 
-    ind_draws_cdict_pot = CDict(value=corr_draws_arr,
+    ind_draws_cdict_pot = cdict(value=corr_draws_arr,
                                  potential=ind_draws_arr)
-    corr_draws_cdict_pot = CDict(value=ind_draws_arr,
+    corr_draws_cdict_pot = cdict(value=ind_draws_arr,
                                  potential=corr_draws_arr)
 
     def test_array(self):
@@ -163,7 +163,7 @@ class testIAT(unittest.TestCase):
 
     key = random.PRNGKey(0)
     ind_draws_arr = random.normal(key, (100,))
-    ind_draws_cdict = CDict(value=ind_draws_arr)
+    ind_draws_cdict = cdict(value=ind_draws_arr)
 
     corr_draws_arr = 0.1 * np.cumsum(ind_draws_arr)
 
@@ -179,9 +179,9 @@ class testIAT(unittest.TestCase):
 
 class testSJD(unittest.TestCase):
     zeros_arr = np.zeros(10)
-    zeros_cdict = CDict(value=zeros_arr)
+    zeros_cdict = cdict(value=zeros_arr)
     seq_arr = np.arange(10)
-    seq_cdict = CDict(value=seq_arr)
+    seq_cdict = cdict(value=seq_arr)
 
     def test_array(self):
         accept_rate = metrics.squared_jumping_distance(self.zeros_arr)
@@ -205,11 +205,11 @@ class testKSDStdGaussian(unittest.TestCase):
 
     n_small = 10
     ind_draws_arr_n_small = random.normal(key, (n_small, dim))
-    sample_n_small = CDict(value=ind_draws_arr_n_small, grad_potential=ind_draws_arr_n_small)
+    sample_n_small = cdict(value=ind_draws_arr_n_small, grad_potential=ind_draws_arr_n_small)
 
     n_large = 1000
     ind_draws_arr_n_large = random.normal(key, (n_large, dim))
-    sample_n_large = CDict(value=ind_draws_arr_n_large, grad_potential=ind_draws_arr_n_large)
+    sample_n_large = cdict(value=ind_draws_arr_n_large, grad_potential=ind_draws_arr_n_large)
 
     def testksd_gaussian_kernel(self):
         kernel = kernels.Gaussian(bandwidth=1.)

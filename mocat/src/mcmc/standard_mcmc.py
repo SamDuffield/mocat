@@ -11,7 +11,7 @@ from functools import partial
 import jax.numpy as np
 from jax import random
 
-from mocat.src.core import CDict, Scenario
+from mocat.src.core import cdict, Scenario
 from mocat.src.mcmc.sampler import MCMCSampler, mh_acceptance_probability
 from mocat.src import utils
 from mocat.src.mcmc.corrections import Metropolis
@@ -31,8 +31,8 @@ class RandomWalk(MCMCSampler):
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -48,8 +48,8 @@ class RandomWalk(MCMCSampler):
 
     def acceptance_probability(self,
                                scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         return np.minimum(1., np.exp(- proposed_state.potential
                                      + reject_state.potential))
 
@@ -68,17 +68,17 @@ class Overdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
         initial_state.grad_potential = scenario.grad_potential(initial_state.value)
         return initial_state, initial_extra
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -98,8 +98,8 @@ class Overdamped(MCMCSampler):
 
     def proposal_potential(self,
                            scenario: Scenario,
-                           reject_state: CDict, reject_extra: CDict,
-                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                           reject_state: cdict, reject_extra: cdict,
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         d = scenario.dim
         stepsize = reject_extra.parameters.stepsize
 
@@ -126,9 +126,9 @@ class HMC(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
         initial_state.grad_potential = scenario.grad_potential(initial_state.value)
         if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
@@ -137,8 +137,8 @@ class HMC(MCMCSampler):
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         d = scenario.dim
 
         stepsize = reject_extra.parameters.stepsize
@@ -159,8 +159,8 @@ class HMC(MCMCSampler):
 
     def acceptance_probability(self,
                                scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         pre_min_alpha = np.exp(- proposed_state.potential
                                + reject_state.potential
                                - utils.gaussian_potential(proposed_state.momenta)
@@ -187,9 +187,9 @@ class Underdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
         initial_state.grad_potential = scenario.grad_potential(initial_state.value)
         if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
@@ -198,8 +198,8 @@ class Underdamped(MCMCSampler):
 
     def always(self,
                scenario: Scenario,
-               reject_state: CDict,
-               reject_extra: CDict) -> Tuple[CDict, CDict]:
+               reject_state: cdict,
+               reject_extra: cdict) -> Tuple[cdict, cdict]:
         d = scenario.dim
 
         stepsize = reject_extra.parameters.stepsize
@@ -216,8 +216,8 @@ class Underdamped(MCMCSampler):
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         stepsize = reject_extra.parameters.stepsize
 
         proposed_state = utils.leapfrog(reject_state,
@@ -246,17 +246,17 @@ class TamedOverdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
         initial_state.grad_potential = scenario.grad_potential(initial_state.value)
         return initial_state, initial_extra
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         proposed_state = reject_state.copy()
 
         d = scenario.dim
@@ -275,19 +275,19 @@ class TamedOverdamped(MCMCSampler):
         return proposed_state, reject_extra
 
     @staticmethod
-    def taming_global(state: CDict,
-                      extra: CDict) -> Union[float, np.ndarray]:
+    def taming_global(state: cdict,
+                      extra: cdict) -> Union[float, np.ndarray]:
         return 1. / (1 + extra.parameters.stepsize * np.linalg.norm(state.grad_potential))
 
     @staticmethod
-    def taming_coord(state: CDict,
-                     extra: CDict) -> Union[float, np.ndarray]:
+    def taming_coord(state: cdict,
+                     extra: cdict) -> Union[float, np.ndarray]:
         return 1. / (1 + extra.parameters.stepsize * np.abs(state.grad_potential))
 
     def proposal_potential(self,
                            scenario: Scenario,
-                           reject_state: CDict, reject_extra: CDict,
-                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                           reject_state: cdict, reject_extra: cdict,
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         d = scenario.dim
         stepsize = reject_extra.parameters.stepsize
 

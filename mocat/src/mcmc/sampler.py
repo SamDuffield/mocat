@@ -9,7 +9,7 @@ from typing import Tuple, Union
 
 from jax import numpy as np
 
-from mocat.src.core import Sampler, Scenario, CDict
+from mocat.src.core import Sampler, Scenario, cdict
 
 
 class MCMCSampler(Sampler):
@@ -19,10 +19,10 @@ class MCMCSampler(Sampler):
                  **kwargs):
 
         if not hasattr(self, 'parameters'):
-            self.parameters = CDict()
+            self.parameters = cdict()
 
         if not hasattr(self, 'tuning'):
-            self.tuning = CDict(parameter='stepsize',
+            self.tuning = cdict(parameter='stepsize',
                                 target=None,
                                 metric='alpha',
                                 monotonicity='decreasing')
@@ -32,15 +32,15 @@ class MCMCSampler(Sampler):
 
     def startup(self,
                 scenario: Scenario,
-                initial_state: CDict = None,
-                initial_extra: CDict = None,
-                random_key: np.ndarray = None) -> Tuple[CDict, CDict]:
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
         if initial_state is None:
             x0 = np.zeros(scenario.dim)
-            initial_state = CDict(value=x0)
+            initial_state = cdict(value=x0)
 
         if initial_extra is None:
-            initial_extra = CDict(random_key=random_key,
+            initial_extra = cdict(random_key=random_key,
                                   iter=0)
         if hasattr(self, 'parameters'):
             initial_extra.parameters = self.parameters.copy()
@@ -49,33 +49,33 @@ class MCMCSampler(Sampler):
 
     def always(self,
                scenario: Scenario,
-               reject_state: CDict,
-               reject_extra: CDict) -> Tuple[CDict, CDict]:
+               reject_state: cdict,
+               reject_extra: cdict) -> Tuple[cdict, cdict]:
         return reject_state, reject_extra
 
     def proposal(self,
                  scenario: Scenario,
-                 reject_state: CDict,
-                 reject_extra: CDict) -> Tuple[CDict, CDict]:
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
         raise NotImplementedError(f'{self.__class__.__name__} markov proposal not initiated')
 
     def proposal_potential(self,
                            scenario: Scenario,
-                           reject_state: CDict, reject_extra: CDict,
-                           proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                           reject_state: cdict, reject_extra: cdict,
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} proposal_potential not initiated')
 
     def acceptance_probability(self,
                                scenario: Scenario,
-                               reject_state: CDict, reject_extra: CDict,
-                               proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                               reject_state: cdict, reject_extra: cdict,
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} acceptance_probability not initiated')
 
 
 def mh_acceptance_probability(sampler: MCMCSampler,
                               scenario: Scenario,
-                              reject_state: CDict, reject_extra: CDict,
-                              proposed_state: CDict, proposed_extra: CDict) -> Union[float, np.ndarray]:
+                              reject_state: cdict, reject_extra: cdict,
+                              proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
     pre_min_alpha = np.exp(- proposed_state.potential
                            + reject_state.potential
                            - sampler.proposal_potential(scenario,

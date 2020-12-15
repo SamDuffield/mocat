@@ -12,12 +12,12 @@ from jax import numpy as np, random, vmap
 from jax.lax import scan
 from jax.experimental.optimizers import adagrad, OptimizerState
 
-from mocat.src.core import Scenario, CDict
+from mocat.src.core import Scenario, cdict
 from mocat.src.kernels import Kernel, Gaussian
 
 
-def svgd_phi_hat(previous_state: CDict,
-                 kernel: Kernel) -> CDict:
+def svgd_phi_hat(previous_state: cdict,
+                 kernel: Kernel) -> cdict:
     n = previous_state.value.shape[0]
 
     def phi_hat_func(x_i):
@@ -31,7 +31,7 @@ def svgd_phi_hat(previous_state: CDict,
     return phi_hat
 
 
-def median_bandwidth_update(state: CDict) -> CDict:
+def median_bandwidth_update(state: cdict) -> cdict:
     # Note jax.numpy.median scales much worse than numpy.median,
     # thus this method is not currently recommended
     out_params = state.kernel_params
@@ -40,7 +40,7 @@ def median_bandwidth_update(state: CDict) -> CDict:
     return out_params
 
 
-def mean_bandwidth_update(state: CDict) -> CDict:
+def mean_bandwidth_update(state: cdict) -> cdict:
     out_params = state.kernel_params
     dist_mat = vmap(lambda x: vmap(lambda y: np.sum(np.square(x - y)))(state.value))(state.value) ** 0.5
     out_params.bandwidth = np.mean(dist_mat) / np.sqrt(2 * np.log(dist_mat.shape[0]))
@@ -51,10 +51,10 @@ def _run_svgd_all(scenario: Scenario,
                   n_iter: int,
                   stepsize: Union[float, Callable],
                   kernel: Kernel,
-                  initial_state: CDict,
+                  initial_state: cdict,
                   kernel_param_update: Callable,
                   optimiser: Callable,
-                  **optim_params) -> CDict:
+                  **optim_params) -> cdict:
     opt_init, opt_update, get_params = optimiser(step_size=stepsize, **optim_params)
 
     grad_vec = vmap(scenario.grad_potential)
@@ -64,8 +64,8 @@ def _run_svgd_all(scenario: Scenario,
 
     initial_state.iter = 0
 
-    def svgd_kernel_all(previous_carry: Tuple[CDict, OptimizerState],
-                        iter_ind: int) -> Tuple[Tuple[CDict, OptimizerState], CDict]:
+    def svgd_kernel_all(previous_carry: Tuple[cdict, OptimizerState],
+                        iter_ind: int) -> Tuple[Tuple[cdict, OptimizerState], cdict]:
         previous_state, previous_opt_state = previous_carry
 
         phi_hat = svgd_phi_hat(previous_state, kernel)
@@ -93,10 +93,10 @@ def _run_svgd_final_only(scenario: Scenario,
                          n_iter: int,
                          stepsize: Union[float, Callable],
                          kernel: Kernel,
-                         initial_state: CDict,
+                         initial_state: cdict,
                          kernel_param_update: Callable,
                          optimiser: Callable,
-                         **optim_params) -> CDict:
+                         **optim_params) -> cdict:
     opt_init, opt_update, get_params = optimiser(step_size=stepsize, **optim_params)
 
     grad_vec = vmap(scenario.grad_potential)
@@ -106,8 +106,8 @@ def _run_svgd_final_only(scenario: Scenario,
 
     initial_state.iter = 0
 
-    def svgd_kernel_final_only(previous_carry: Tuple[CDict, OptimizerState],
-                               iter_ind: int) -> Tuple[Tuple[CDict, OptimizerState], None]:
+    def svgd_kernel_final_only(previous_carry: Tuple[cdict, OptimizerState],
+                               iter_ind: int) -> Tuple[Tuple[cdict, OptimizerState], None]:
         previous_state, previous_opt_state = previous_carry
 
         phi_hat = svgd_phi_hat(previous_state, kernel)
@@ -136,12 +136,12 @@ def run_svgd(scenario: Scenario,
              stepsize: Union[float, Callable],
              kernel: Kernel = None,
              n_samps: int = None,
-             initial_state: CDict = None,
+             initial_state: cdict = None,
              kernel_param_update: Callable = None,
              optimiser: Callable = adagrad,
              return_int_samples: bool = True,
              name: str = None,
-             **optim_params) -> CDict:
+             **optim_params) -> cdict:
     if n_samps is None and initial_state is None:
         raise ValueError('Either n_samps or initial_state required')
 
@@ -149,7 +149,7 @@ def run_svgd(scenario: Scenario,
         n_samps = len(initial_state.value)
 
     if initial_state is None:
-        initial_state = CDict(value=random.normal(random.PRNGKey(0), (n_samps, scenario.dim)))
+        initial_state = cdict(value=random.normal(random.PRNGKey(0), (n_samps, scenario.dim)))
 
     if kernel is None:
         kernel = Gaussian()
@@ -185,7 +185,7 @@ def run_svgd(scenario: Scenario,
         name = scenario.name + ": SVGD"
     output.name = name
 
-    output.run_params = CDict(name=output.name,
+    output.run_params = cdict(name=output.name,
                               kernel=str(kernel),
                               kernel_param_update=update_kern_params_bool,
                               stepsize=stepsize,

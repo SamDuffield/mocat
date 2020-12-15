@@ -15,7 +15,7 @@ from jax import jit, numpy as np
 import matplotlib.pyplot as plt
 from matplotlib.figure import Figure
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 
 
 @partial(jit, static_argnums=(0,))
@@ -93,11 +93,11 @@ def gaussian_potential(x: np.ndarray,
 
 
 @partial(jit, static_argnums=(1, 3))
-def leapfrog(previous_state: CDict,
+def leapfrog(previous_state: cdict,
              grad_potential: Callable,
              stepsize: float,
-             n_steps: int) -> CDict:
-    def leapfrog_step(init_state: CDict,
+             n_steps: int) -> cdict:
+    def leapfrog_step(init_state: cdict,
                       _: Any):
         new_state = init_state.copy()
 

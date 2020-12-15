@@ -11,7 +11,7 @@ import jax.numpy as np
 from jax.random import PRNGKey
 import numpy.testing as npt
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src.scenarios import toy_scenarios
 from mocat.src.mcmc.run import run_mcmc
 from mocat.src.mcmc.metrics import ess, acceptance_rate
@@ -36,7 +36,7 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
             self.warmstart_sample = run_mcmc(self.scenario, self.sampler, self.n, PRNGKey(0))
 
     def _test_mean(self,
-                   sample: CDict):
+                   sample: cdict):
         if sample.value.ndim == 3:
             val = np.concatenate(sample.value)
         else:
@@ -45,7 +45,7 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
         npt.assert_array_almost_equal(samp_mean, np.zeros(2), decimal=1)
 
     def _test_cov(self,
-                  sample: CDict):
+                  sample: cdict):
         if sample.value.ndim == 3:
             val = np.concatenate(sample.value)
         else:
@@ -54,7 +54,7 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
         npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=1)
 
     def _test_ess(self,
-                  sample: CDict):
+                  sample: cdict):
         samp_ess_pot = ess(sample)
         samp_ess_0 = ess(sample, dim=0)
         samp_ess_1 = ess(sample, dim=1)
@@ -68,7 +68,7 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
         self.assertGreater(samp_ess_1, self.n / 100)
 
     def _test_acceptance_rate(self,
-                              sample: CDict):
+                              sample: cdict):
         npt.assert_almost_equal(acceptance_rate(sample), self.sampler.tuning.target, decimal=1)
 
 

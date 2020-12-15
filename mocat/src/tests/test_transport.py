@@ -12,7 +12,7 @@ import jax.numpy as np
 from jax.random import PRNGKey
 import numpy.testing as npt
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src.scenarios import toy_scenarios
 from mocat.src.smc_samplers import run_smc_sampler
 from mocat.src.svgd import run_svgd, median_bandwidth_update, mean_bandwidth_update
@@ -25,7 +25,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
     n = int(1e4)
 
     def _test_mean(self,
-                   sample: CDict):
+                   sample: cdict):
         if sample.value.ndim == 3:
             val = np.concatenate(sample.value)
         else:
@@ -34,7 +34,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
         npt.assert_array_almost_equal(samp_mean, np.zeros(2), decimal=1)
 
     def _test_cov(self,
-                  sample: CDict):
+                  sample: cdict):
         if sample.value.ndim == 3:
             val = np.concatenate(sample.value)
         else:

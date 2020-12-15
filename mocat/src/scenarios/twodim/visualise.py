@@ -16,7 +16,7 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 from matplotlib.contour import QuadContourSet
 
-from mocat.src.core import CDict, Sampler
+from mocat.src.core import cdict, Sampler
 from mocat.src.scenarios.twodim.vectorise import _generate_plot_grid, TwoDimScenario
 from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src.mcmc.corrections import Correction, Uncorrected, Metropolis
@@ -91,7 +91,7 @@ class RunVisUtils:
         return ax.plot(x_points[:, 0], x_points[:, 1], marker='.', color='black', zorder=2.5, alpha=alpha)
 
     @staticmethod
-    def arrayify(cdict: CDict) -> CDict:
+    def arrayify(cdict: cdict) -> cdict:
         out_cdict = cdict.copy()
         for key, value in out_cdict.__dict__.items():
             if isinstance(value, (float, int)):
@@ -104,15 +104,15 @@ class RunVisUtils:
                      sampler: MCMCSampler,
                      n: int,
                      correction: Correction,
-                     initial_state: CDict,
-                     initial_extra: CDict) -> Tuple[CDict, CDict, CDict]:
+                     initial_state: cdict,
+                     initial_extra: cdict) -> Tuple[cdict, cdict, cdict]:
 
         initial_state = RunVisUtils.arrayify(initial_state)
         initial_extra = RunVisUtils.arrayify(initial_extra)
 
         @jit
-        def markov_kernel(previous_carry: Tuple[CDict, CDict],
-                          _: Any) -> Tuple[Tuple[CDict, CDict], Tuple[CDict, CDict, CDict]]:
+        def markov_kernel(previous_carry: Tuple[cdict, cdict],
+                          _: Any) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict, cdict]]:
             previous_state, previous_extra = previous_carry
             reject_state = previous_state.copy()
             reject_extra = previous_extra.copy()
@@ -165,8 +165,8 @@ class RunVis:
                  sampler: Union[Sampler, MCMCSampler],
                  correction: Correction,
                  n: int,
-                 initial_state: CDict,
-                 initial_extra: CDict,
+                 initial_state: cdict,
+                 initial_extra: cdict,
                  utils: RunVisUtils = RunVisUtils()):
         self.utils = utils
         self.ax = ax
@@ -262,8 +262,8 @@ class UncorrectedRunVis(RunVis):
                  sampler: MCMCSampler,
                  correction: Correction,
                  n: int,
-                 initial_state: CDict,
-                 initial_extra: CDict,
+                 initial_state: cdict,
+                 initial_extra: cdict,
                  utils: RunVisUtils = RunVisUtils()):
         super().__init__(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
         self.frames_per_sample = 2 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 2
@@ -271,9 +271,9 @@ class UncorrectedRunVis(RunVis):
         if self.ensemble:
             # Add new empty axis - will be called on this axis with ensemble_index > 0
             # Utilises JAX convention on array overindexing
-            self.prop_pot_plot_space = CDict(value=self.plot_space[2][np.newaxis])
+            self.prop_pot_plot_space = cdict(value=self.plot_space[2][np.newaxis])
         else:
-            self.prop_pot_plot_space = CDict(value=self.plot_space[2])
+            self.prop_pot_plot_space = cdict(value=self.plot_space[2])
 
         try:
             prop_pot = self.sampler.proposal_potential(self.scenario,
@@ -373,8 +373,8 @@ class MHRunVis(UncorrectedRunVis):
                  sampler: MCMCSampler,
                  correction: Correction,
                  n: int,
-                 initial_state: CDict,
-                 initial_extra: CDict,
+                 initial_state: cdict,
+                 initial_extra: cdict,
                  utils: RunVisUtils = RunVisUtils()):
         super().__init__(ax, scenario, sampler, correction, n, initial_state, initial_extra, utils)
         self.frames_per_sample = 3 + self.sampler.parameters.leapfrog_steps if self.leapfrog else 3
@@ -404,8 +404,8 @@ def visualise(scenario: TwoDimScenario,
               sampler: MCMCSampler,
               random_key: np.ndarray,
               correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
-              initial_state: CDict = None,
-              initial_extra: CDict = None,
+              initial_state: cdict = None,
+              initial_extra: cdict = None,
               run_vis: Union[RunVis, Type[RunVis]] = None,
               n: int = 100,
               ms_per_sample: float = 1500,

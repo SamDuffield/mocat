@@ -12,9 +12,9 @@ from mocat import abc
 from mocat.version import __version__
 
 from mocat.src.core import Scenario
-from mocat.src.core import CDict
-from mocat.src.core import save_CDict
-from mocat.src.core import load_CDict
+from mocat.src.core import cdict
+from mocat.src.core import save_cdict
+from mocat.src.core import load_cdict
 from mocat.src.core import Sampler
 
 from mocat.src.mcmc.metrics import acceptance_rate

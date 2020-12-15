@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: core.py
-# Description: mocat primitives Scenario, CDict and Sampler.
+# Description: mocat primitives Scenario, cdict and Sampler.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -55,23 +55,23 @@ class Scenario:
 
 
 @register_pytree_node_class
-class CDict:
+class cdict:
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
 
-    def copy(self) -> 'CDict':
-        return CDict(**self.__dict__)
+    def copy(self) -> 'cdict':
+        return cdict(**self.__dict__)
 
-    def deepcopy(self) -> 'CDict':
+    def deepcopy(self) -> 'cdict':
         return copy.deepcopy(self)
 
     def __repr__(self):
-        return f"mocat.CDict({self.__dict__.__repr__()})"
+        return f"mocat.cdict({self.__dict__.__repr__()})"
 
     def save(self,
              path: Union[str, Path],
              overwrite: bool = False):
-        save_CDict(self, path, overwrite)
+        save_cdict(self, path, overwrite)
 
     def tree_flatten(self):
         return unzip2(self.__dict__.items())[::-1]
@@ -81,7 +81,7 @@ class CDict:
         return cls(**dict(zip(keys, xs)))
 
     def __getitem__(self,
-                    item: Union[str, int, slice, np.ndarray]) -> 'CDict':
+                    item: Union[str, int, slice, np.ndarray]) -> 'cdict':
         if isinstance(item, str):
             return self.__dict__[item]
 
@@ -92,7 +92,7 @@ class CDict:
         return out_cdict
 
     def __add__(self,
-                other: 'CDict') -> 'CDict':
+                other: 'cdict') -> 'cdict':
         out_cdict = self.copy()
         if other is None:
             return out_cdict
@@ -117,12 +117,12 @@ class CDict:
         return self.__dict__.__iter__()
 
 
-def save_CDict(in_cdict: CDict,
+def save_cdict(in_cdict: cdict,
                path: Union[str, Path],
                overwrite: bool = False):
     path = Path(path)
-    if path.suffix != '.CDict':
-        path = path.with_suffix('.CDict')
+    if path.suffix != '.cdict':
+        path = path.with_suffix('.cdict')
     path.parent.mkdir(parents=True, exist_ok=True)
     if path.exists():
         if overwrite:
@@ -133,12 +133,12 @@ def save_CDict(in_cdict: CDict,
         pickle.dump(in_cdict, file)
 
 
-def load_CDict(path: Union[str, Path]) -> CDict:
+def load_cdict(path: Union[str, Path]) -> cdict:
     path = Path(path)
     if not path.is_file():
         raise ValueError(f'Not a file: {path}')
-    if path.suffix != '.CDict':
-        raise ValueError(f'Not a .CDict file: {path}')
+    if path.suffix != '.cdict':
+        raise ValueError(f'Not a .cdict file: {path}')
     with open(path, 'rb') as file:
         data = pickle.load(file)
 
@@ -157,7 +157,7 @@ class Sampler:
                  **kwargs):
 
         if not hasattr(self, 'parameters'):
-            self.parameters = CDict()
+            self.parameters = cdict()
 
         if name is not None:
             self.name = name

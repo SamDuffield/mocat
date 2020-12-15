@@ -12,19 +12,19 @@ from jax import vmap
 import numpy as onp         # For onp.fft.fft(x, n_samps=n_samps) and onp.unique(x, axis=0) (JAX doesn't support as of writing)
 import matplotlib.pyplot as plt
 
-from mocat.src.core import CDict
+from mocat.src.core import cdict
 from mocat.src.utils import _metric_plot_decorate
 from mocat.src.kernels import Kernel
 
 
-def _is_cdict(input: Union[np.ndarray, CDict],
+def _is_cdict(input: Union[np.ndarray, cdict],
               value_out: bool = False) -> Union[bool, Tuple[bool, np.ndarray]]:
-    if isinstance(input, CDict):
+    if isinstance(input, cdict):
         return (True, input.value) if value_out else True
     elif isinstance(input, np.ndarray):
         return (False, input) if value_out else False
     else:
-        raise ValueError("Input isn't ndarray or CDict")
+        raise ValueError("Input isn't ndarray or cdict")
 
 
 def _acceptance_rate_values(array: np.ndarray) -> float:
@@ -38,7 +38,7 @@ def _acceptance_rate_values(array: np.ndarray) -> float:
         raise TypeError("Can't compute acceptance rate of object")
 
 
-def acceptance_rate(sample: Union[np.ndarray, CDict],
+def acceptance_rate(sample: Union[np.ndarray, cdict],
                     alpha: bool = True) -> float:
 
     _, vals = _is_cdict(sample, True)
@@ -55,7 +55,7 @@ def _next_pow_two(n: int) -> int:
     return i
 
 
-def _autocorrelation_1darray(x: Union[np.ndarray, CDict],
+def _autocorrelation_1darray(x: Union[np.ndarray, cdict],
                              max_lag_eval: int) -> np.ndarray:
     if x.ndim != 1:
         raise ValueError("_autocorrelation_1darray must be applied to a 1 dimensional np.ndarray")
@@ -66,7 +66,7 @@ def _autocorrelation_1darray(x: Union[np.ndarray, CDict],
     return acf / acf[0]
 
 
-def autocorrelation(sample: Union[CDict, np.ndarray],
+def autocorrelation(sample: Union[cdict, np.ndarray],
                     dim: int = None,
                     max_lag_eval: int = 1000,
                     ensemble_index: int = None) -> np.ndarray:
@@ -74,7 +74,7 @@ def autocorrelation(sample: Union[CDict, np.ndarray],
     _, vals = _is_cdict(sample, value_out=True)
 
     if vals.ndim == 3:
-        if isinstance(sample, CDict) and hasattr(sample, 'potential'):
+        if isinstance(sample, cdict) and hasattr(sample, 'potential'):
             if ensemble_index is None:
                 if dim is None:
                     return _autocorrelation_1darray(np.mean(sample.potential, axis=1), max_lag_eval)
@@ -93,7 +93,7 @@ def autocorrelation(sample: Union[CDict, np.ndarray],
                 return autocorrelation(sample[:, ensemble_index, :], dim, max_lag_eval)
 
     elif vals.ndim == 2:
-        if isinstance(sample, CDict) and hasattr(sample, 'potential'):
+        if isinstance(sample, cdict) and hasattr(sample, 'potential'):
             if dim is None:
                 return _autocorrelation_1darray(sample.potential, max_lag_eval)
             else:
@@ -106,7 +106,7 @@ def autocorrelation(sample: Union[CDict, np.ndarray],
                 return _autocorrelation_1darray(vals[:, dim], max_lag_eval)
 
     elif vals.ndim == 1:
-        if isinstance(sample, CDict) and hasattr(sample, 'potential'):
+        if isinstance(sample, cdict) and hasattr(sample, 'potential'):
             if dim is None:
                 return _autocorrelation_1darray(sample.potential, max_lag_eval)
             else:
@@ -119,7 +119,7 @@ def autocorrelation(sample: Union[CDict, np.ndarray],
         raise ValueError("Input to autocorrelation must be numpy.ndarray or Sample")
 
 
-def integrated_autocorrelation_time(sample: Union[np.ndarray, CDict],
+def integrated_autocorrelation_time(sample: Union[np.ndarray, cdict],
                                     dim: int = None,
                                     max_lag_iat: int = None,
                                     max_lag_eval: int = 1000,
@@ -137,7 +137,7 @@ def integrated_autocorrelation_time(sample: Union[np.ndarray, CDict],
     return float(iats_all[max_lag_iat])
 
 
-def ess(sample: Union[np.ndarray, CDict],
+def ess(sample: Union[np.ndarray, cdict],
         dim: int = None,
         max_lag_iat: int = None,
         max_lag_eval: int = 1000,
@@ -153,18 +153,18 @@ def ess(sample: Union[np.ndarray, CDict],
     return n_mult / iat
 
 
-def ess_per_second(sample: CDict,
+def ess_per_second(sample: cdict,
                    dim: int = None,
                    max_lag_iat: int = None,
                    max_lag_eval: int = 1000) -> float:
 
     if not hasattr(sample, 'time'):
-        raise ValueError("Time not stored in CDict")
+        raise ValueError("Time not stored in cdict")
     else:
         return ess(sample, dim, max_lag_iat, max_lag_eval) / sample.time
 
 
-def squared_jumping_distance(sample: Union[np.ndarray, CDict],
+def squared_jumping_distance(sample: Union[np.ndarray, cdict],
                              dim: int = 0) -> float:
 
     _, vals = _is_cdict(sample, value_out=True)
@@ -173,7 +173,7 @@ def squared_jumping_distance(sample: Union[np.ndarray, CDict],
     return float(sjd[..., dim].mean())
 
 
-def ksd(sample: CDict,
+def ksd(sample: cdict,
         kernel: Kernel,
         weighted: bool = True,
         **kernel_params) -> float:
@@ -204,7 +204,7 @@ def ksd(sample: CDict,
 
 
 @_metric_plot_decorate
-def autocorrelation_plot(sample: Union[np.ndarray, CDict],
+def autocorrelation_plot(sample: Union[np.ndarray, cdict],
                          dim: int = None,
                          max_lag_plot: int = 100,
                          max_lag_eval: int = 1000,
@@ -216,7 +216,7 @@ def autocorrelation_plot(sample: Union[np.ndarray, CDict],
 
 
 @_metric_plot_decorate
-def trace_plot(sample: Union[np.ndarray, CDict],
+def trace_plot(sample: Union[np.ndarray, cdict],
                dim: int = None,
                last_n: int = None,
                ax: plt.Axes = None,
@@ -228,7 +228,7 @@ def trace_plot(sample: Union[np.ndarray, CDict],
     else:
         start = vals.shape[0] - last_n
 
-    if dim is None and isinstance(sample, CDict) and hasattr(sample, 'potential'):
+    if dim is None and isinstance(sample, cdict) and hasattr(sample, 'potential'):
         ax.plot(sample.potential[start:], **kwargs)
     else:
         if dim is None:
@@ -237,7 +237,7 @@ def trace_plot(sample: Union[np.ndarray, CDict],
 
 
 @_metric_plot_decorate
-def plot_2d_samples(sample: Union[np.ndarray, CDict],
+def plot_2d_samples(sample: Union[np.ndarray, cdict],
                     dim1: int = 0,
                     dim2: int = 1,
                     s: float = 0.5,
@@ -255,7 +255,7 @@ def plot_2d_samples(sample: Union[np.ndarray, CDict],
 
 
 @_metric_plot_decorate
-def hist_1d_samples(sample: Union[np.ndarray, CDict],
+def hist_1d_samples(sample: Union[np.ndarray, cdict],
                     dim: int = 0,
                     bins: int = 50,
                     density: bool = True,
