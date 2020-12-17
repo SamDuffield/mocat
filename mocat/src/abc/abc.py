@@ -15,7 +15,6 @@ from mocat.src.mcmc.sampler import MCMCSampler
 class ABCScenario(Scenario):
     data: np.ndarray = None
     summary_statistic: np.ndarray = None
-    threshold: float = None
 
     def __init__(self,
                  name: str = None,
@@ -65,8 +64,9 @@ class ABCSampler(MCMCSampler):
     tuning = None
 
     def __init__(self,
+                 threshold: float = np.inf,
                  **kwargs):
-        super().__init__(**kwargs)
+        super().__init__(threshold=threshold, **kwargs)
 
     def startup(self,
                 abc_scenario: ABCScenario,
@@ -84,7 +84,7 @@ class ABCSampler(MCMCSampler):
         if initial_extra is None:
             initial_extra = cdict(random_key=random_key,
                                   iter=0)
-        if hasattr(self, 'parameters'):
+        if hasattr(self, 'parameters') and not hasattr(initial_extra, 'parameters'):
             initial_extra.parameters = self.parameters.copy()
 
         if not hasattr(initial_state, 'prior_potential'):

@@ -33,6 +33,8 @@ def default_post_metropolis_abc_mcmc_update(previous_full_state: cdict,
     d = new_full_state.value.shape[-1]
     new_full_extra.parameters.stepsize = vmap(np.cov, (1,))(new_full_state.value) / d * 2.38 ** 2
     # new_full_extra.parameters.stepsize = vmap(np.cov, (1,))(new_full_state.value)
+
+    new_full_extra.parameters.threshold = new_full_extra.parameters.threshold[-1, -1]
     return new_full_state, new_full_extra
 
 
@@ -56,8 +58,9 @@ def run_abc_smc_sampler(abc_scenario: ABCScenario,
         initial_state = cdict(value=x0)
 
     if mcmc_sampler is None:
-        mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value) / abc_scenario.dim * 2.38 ** 2)
-        # mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value))
+        mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value) / abc_scenario.dim * 2.38 ** 2,
+                                     threshold=np.inf)
+        # mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value), threshold=np.inf)
 
     mcmc_sampler, mcmc_correction = check_correction(mcmc_sampler, mcmc_correction)
 
@@ -73,6 +76,7 @@ def run_abc_smc_sampler(abc_scenario: ABCScenario,
         lambda state, extra: startup_mcmc(abc_scenario, mcmc_sampler, None, mcmc_correction,
                                           state, extra), (0, init_extra_cdict_map_inds))(initial_state,
                                                                                          initial_extra)
+    initial_state.threshold_schedule = np.inf
 
     if None in initial_extra.parameters.__dict__.values():
         raise ValueError(f'None found in {mcmc_sampler.name} parameters (within ABC-SMC sampler): '
@@ -150,7 +154,7 @@ def _run_adaptive_abc_smc_sampler(abc_scenario: ABCScenario,
                                   max_iter: int,
                                   threshold_quantile_retain: float,
                                   continuation_func: Callable) -> cdict:
-    initial_state.threshold_schedule = np.quantile(initial_state.distance, threshold_quantile_retain)
+    initial_state.threshold_schedule = initial_extra.parameters.threshold[0]
 
     abc_smc_sampler_advance = init_abc_smc_sampler_advance(abc_scenario,
                                                            mcmc_sampler,
@@ -172,7 +176,7 @@ def _run_adaptive_abc_smc_sampler(abc_scenario: ABCScenario,
 
     chain = while_loop_stacked(continuation_func,
                                adaptive_abc_smc_kernel,
-                               (initial_state, initial_extra),
+                               (initial_state.copy(), initial_extra.copy()),
                                max_iter)
     return chain
 
@@ -223,18 +227,20 @@ def init_abc_smc_sampler_advance(abc_scenario: ABCScenario,
 
         n = previous_full_state.value.shape[0]
 
+        new_full_extra.parameters.threshold = new_threshold * np.ones(n)
+
         # Resample
         int_random_key, _ = random.split(new_full_extra.random_key[0])
         sample_inds = random.choice(int_random_key, a=n,
                                     p=previous_full_state.distance < new_threshold, shape=(n,))
         new_full_state = new_full_state[sample_inds]
+        new_full_extra = new_full_extra[sample_inds]
+        new_full_extra.random_key = previous_full_extra.random_key
 
-        abc_scenario.threshold = new_threshold
-
-        new_full_state, new_full_extra = mcmc_chains_vec(new_full_state, new_full_extra)
+        new_full_enlarged_state, new_full_enlarged_extra = mcmc_chains_vec(new_full_state, new_full_extra)
 
         new_full_state, new_full_extra = post_mcmc_update(previous_full_state, previous_full_extra,
-                                                          new_full_state, new_full_extra)
+                                                          new_full_enlarged_state, new_full_enlarged_extra)
 
         new_full_state.threshold_schedule = new_threshold
         return new_full_state, new_full_extra

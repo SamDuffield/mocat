@@ -151,6 +151,7 @@ def load_cdict(path: Union[str, Path]) -> cdict:
 
 
 class Sampler:
+    parameters: cdict
 
     def __init__(self,
                  name: str = None,

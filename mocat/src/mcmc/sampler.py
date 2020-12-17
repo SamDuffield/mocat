@@ -18,9 +18,6 @@ class MCMCSampler(Sampler):
     def __init__(self,
                  **kwargs):
 
-        if not hasattr(self, 'parameters'):
-            self.parameters = cdict()
-
         if not hasattr(self, 'tuning'):
             self.tuning = cdict(parameter='stepsize',
                                 target=None,

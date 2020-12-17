@@ -32,7 +32,7 @@ class ImportanceABC(ABCSampler):
                    state: cdict,
                    extra: cdict):
         return np.where(abc_scenario.distance_function(state.simulated_data)
-                        < abc_scenario.threshold,
+                        < extra.parameters.threshold,
                         - abc_scenario.prior_potential(state.value)
                         + self.importance_potential(abc_scenario, state.value),
                         -np.inf)
@@ -83,7 +83,7 @@ class VanillaABC(ImportanceABC):
                    abc_scenario: ABCScenario,
                    state: cdict,
                    extra: cdict):
-        return np.where(state.distance < abc_scenario.threshold,
+        return np.where(state.distance < extra.parameters.threshold,
                         0.,
                         -np.inf)
 
@@ -93,8 +93,9 @@ class RandomWalkABC(ABCSampler):
     default_correction = Metropolis
 
     def __init__(self,
+                 threshold: float = None,
                  stepsize: float = None):
-        super().__init__()
+        super().__init__(threshold=threshold)
         self.parameters.stepsize = stepsize
 
     def acceptance_probability(self,
@@ -103,7 +104,7 @@ class RandomWalkABC(ABCSampler):
                                proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
         return np.minimum(1., np.exp(-proposed_state.prior_potential
                                      + reject_state.prior_potential)
-                          * proposed_state.distance < abc_scenario.threshold)
+                          * (proposed_state.distance < reject_extra.parameters.threshold))
 
     def proposal(self,
                  abc_scenario: ABCScenario,

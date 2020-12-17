@@ -95,4 +95,4 @@ class TransformedLotkaVolterra(LotkaVolterra):
     def simulate_data(self,
                       x: np.ndarray,
                       random_key: np.ndarray) -> np.ndarray:
-        return np.log(super().simulate_data(self.constrain(x), random_key))
+        return super().simulate_data(self.constrain(x), random_key)
