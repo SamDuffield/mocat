@@ -70,9 +70,11 @@ def run_tempered_ensemble_kalman_inversion(scenario: Union[Scenario, Callable],
                 theta = data.size / 2
             if continuation_criterion is None:
                 continuation_criterion = lambda state, extra, prev_sim_data: state.temperature_schedule < max_temp
+            else:
+                max_temp = np.inf
 
             samps = _run_adaptive_teki(simulator, n_samps, random_key, data, prior_samps,
-                                       max_iter, continuation_criterion, theta)
+                                       max_iter, continuation_criterion, theta, max_temp)
 
     else:
         samps = _run_presheduled_teki(simulator, n_samps, random_key, data, prior_samps,
@@ -168,7 +170,8 @@ def _run_adaptive_teki(simulator: Callable,
                        max_iter: int,
                        continuation_criterion: Callable[
                                                   [cdict, cdict, np.ndarray], bool],
-                       theta: float) -> cdict:
+                       theta: float,
+                       max_temp: float) -> cdict:
     d = prior_samps.shape[-1]
     d_y = len(data)
 
@@ -213,7 +216,7 @@ def _run_adaptive_teki(simulator: Callable,
                                      np.sqrt(theta / np.cov(least_squares_functionals)))
         new_alpha_recip = np.minimum(new_alpha_recip, 1)
         new_alpha = 1 / new_alpha_recip
-        new_temp = previous_temp + new_alpha_recip
+        new_temp = np.minimum(previous_temp + new_alpha_recip, max_temp)
 
         tempered_kalman_gain = cross_cov_upper \
                                @ np.linalg.inv(sim_data_cov
