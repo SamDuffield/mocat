@@ -1,10 +1,12 @@
 
 from mocat import twodim
 
-from mocat.src.scenarios.toy_scenarios import Gaussian
-from mocat.src.scenarios.toy_scenarios import GaussianMixture
-from mocat.src.scenarios.toy_scenarios import DoubleWell
-from mocat.src.scenarios.toy_scenarios import Rastrigin
+from mocat.src.core import Scenario
+
+from mocat.src.scenarios.toy_examples import Gaussian
+from mocat.src.scenarios.toy_examples import GaussianMixture
+from mocat.src.scenarios.toy_examples import DoubleWell
+from mocat.src.scenarios.toy_examples import Rastrigin
 
 
 

@@ -16,11 +16,6 @@ from mocat.src import kernels
 class TestGaussianKernel(unittest.TestCase):
     kernel = kernels.Gaussian()
 
-    def test_copy(self):
-        kernel2 = self.kernel.copy()
-        kernel2.bandwidth = 3.
-        npt.assert_equal(self.kernel.parameters.bandwidth, 1.)
-
     def test_call(self):
         npt.assert_array_almost_equal(self.kernel(np.zeros(5), np.zeros(5)), 1.)
         npt.assert_array_almost_equal(self.kernel(np.zeros(5), np.ones(5)), 0.082085006)
@@ -36,11 +31,6 @@ class TestGaussianKernel(unittest.TestCase):
 
 class TestIMQKernel(unittest.TestCase):
     kernel = kernels.IMQ()
-
-    def test_copy(self):
-        kernel2 = self.kernel.copy()
-        kernel2.bandwidth = 3.
-        npt.assert_equal(self.kernel.parameters.bandwidth, 1.)
 
     def test_call(self):
         npt.assert_array_almost_equal(self.kernel(np.zeros(5), np.zeros(5)), 1.)

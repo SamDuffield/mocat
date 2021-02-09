@@ -16,17 +16,23 @@ from mocat.src.utils import extract_dimension, reset_covariance, gaussian_potent
 class LinearGaussian(ABCScenario):
     name = 'Linear Gaussian'
 
-    prior_covariance_sqrt = None
-    prior_precision_sqrt = None
-    likelihood_covariance_sqrt = None
-    likelihood_precision_sqrt = None
+    prior_covariance_sqrt: np.ndarray = None
+    prior_precision_sqrt: np.ndarray = None
+    prior_precision_det: float = None
+    likelihood_covariance_sqrt: np.ndarray = None
+    likelihood_precision_sqrt: np.ndarray = None
+    likelihood_precision_det: float = None
 
     def __init__(self,
                  prior_mean: Union[float, np.ndarray] = 0.,
                  prior_covariance: Union[float, np.ndarray] = 1.,
+                 data: Union[float, np.ndarray] = 0.,
                  likelihood_matrix: Union[float, np.ndarray] = 1.,
                  likelihood_covariance: Union[float, np.ndarray] = 1.,
                  **kwargs):
+
+        if data is not None:
+            self.data = data
 
         self.dim = extract_dimension(prior_mean, prior_covariance,
                                      likelihood_matrix, likelihood_covariance)
@@ -64,8 +70,10 @@ class LinearGaussian(ABCScenario):
         return self.prior_mean + self.prior_covariance_sqrt @ random.normal(random_key, (self.dim,))
 
     def prior_potential(self,
-                        x: np.ndarray) -> Union[float, np.ndarray]:
-        return gaussian_potential(x, self.prior_mean, sqrt_prec=self.prior_precision_sqrt)
+                        x: np.ndarray,
+                        random_key: np.ndarray = None) -> Union[float, np.ndarray]:
+        return gaussian_potential(x, self.prior_mean,
+                                  sqrt_prec=self.prior_precision_sqrt, det_prec=self.prior_precision_det)
 
     def likelihood_sample(self,
                           x: np.ndarray,
@@ -74,17 +82,7 @@ class LinearGaussian(ABCScenario):
 
     def likelihood_potential(self,
                              x: np.ndarray,
-                             y: np.ndarray) -> Union[float, np.ndarray]:
-        return gaussian_potential(y, x @ self.likelihood_matrix.T, sqrt_prec=self.likelihood_precision_sqrt)
+                             random_key: np.ndarray = None) -> Union[float, np.ndarray]:
+        return gaussian_potential(self.data, x @ self.likelihood_matrix.T,
+                                  sqrt_prec=self.likelihood_precision_sqrt, det_prec=self.likelihood_precision_det)
 
-    def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
-        return self.prior_potential(x) + self.likelihood_potential(x, self.summary_statistic)
-
-    def summarise_data(self,
-                       data: np.ndarray) -> np.ndarray:
-        return data
-
-    def simulate_data(self,
-                      x: np.ndarray,
-                      random_key: np.ndarray) -> np.ndarray:
-        return self.likelihood_sample(x, random_key)

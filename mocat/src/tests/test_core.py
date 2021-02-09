@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: tests/test_core.py
-# Description: Tests for core
+# Description: Tests for core and Sampler
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -8,9 +8,11 @@
 import unittest
 
 import jax.numpy as np
+import mocat.src.sample
 import numpy.testing as npt
 
 from mocat.src import core
+from mocat.src import sample
 
 
 class Testcdict(unittest.TestCase):
@@ -75,8 +77,7 @@ class Testcdict(unittest.TestCase):
 
 
 class TestSampler(unittest.TestCase):
-    sampler = core.Sampler(name='test',
-                           other=np.zeros(2))
+    sampler = sample.Sampler(name='test', other=np.zeros(2))
 
     def test_init(self):
         npt.assert_equal(self.sampler.name, 'test')
@@ -84,9 +85,9 @@ class TestSampler(unittest.TestCase):
         npt.assert_array_equal(self.sampler.parameters.other, np.zeros(2))
 
     def test_copy(self):
-        sampler2 = self.sampler.copy()
+        sampler2 = self.sampler.deepcopy()
 
-        npt.assert_(isinstance(sampler2, core.Sampler))
+        npt.assert_(isinstance(sampler2, sample.Sampler))
 
         sampler2.name = 'other'
         npt.assert_equal(self.sampler.name, 'test')

@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: ssm/tests/test_linear_gaussian.py
+# Module: ssm/tests/test_ssm_linear_gaussian.py
 # Description: Tests for linear TemporalGaussian state space models (and Kalman filtering/smoothing).
 #
 # Web: https://github.com/SamDuffield/mocat

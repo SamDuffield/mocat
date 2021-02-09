@@ -11,19 +11,18 @@ import unittest
 import jax.numpy as np
 import numpy.testing as npt
 
-from mocat.src.scenarios import toy_scenarios
+from mocat.src.scenarios import toy_examples
 
 
 class Test1DGaussian(unittest.TestCase):
 
-    scenario = toy_scenarios.Gaussian(1)
+    scenario = toy_examples.Gaussian(1)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
         npt.assert_equal(self.scenario.mean.shape, (1,))
-        npt.assert_equal(self.scenario.cov.shape, (1, 1))
-        npt.assert_equal(self.scenario.prec.shape, (1, 1))
-        npt.assert_equal(self.scenario.sqrt_prec.shape, (1, 1))
+        npt.assert_equal(self.scenario.covariance.shape, (1, 1))
+        npt.assert_equal(self.scenario.precision_sqrt.shape, (1, 1))
 
     def test_scalar_potential(self):
         npt.assert_array_equal(self.scenario.potential(0.), 0.)
@@ -34,21 +33,19 @@ class Test1DGaussian(unittest.TestCase):
         npt.assert_array_equal(self.scenario.grad_potential(5.), 5.)
 
     def test_setcov(self):
-        self.scenario.cov = np.array([[7.]])
-        npt.assert_array_equal(self.scenario.prec, 1/7.)
-        npt.assert_array_almost_equal(self.scenario.sqrt_prec, 0.37796447)
+        self.scenario.covariance = np.array([[7.]])
+        npt.assert_array_almost_equal(self.scenario.precision_sqrt, 0.37796447)
 
 
 class TestNDGaussian(unittest.TestCase):
 
-    scenario = toy_scenarios.Gaussian(10)
+    scenario = toy_examples.Gaussian(10)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 10)
         npt.assert_equal(self.scenario.mean.shape, (10,))
-        npt.assert_equal(self.scenario.cov.shape, (10, 10))
-        npt.assert_equal(self.scenario.prec.shape, (10, 10))
-        npt.assert_equal(self.scenario.sqrt_prec.shape, (10, 10))
+        npt.assert_equal(self.scenario.covariance.shape, (10, 10))
+        npt.assert_equal(self.scenario.precision_sqrt.shape, (10, 10))
 
     def test_array_potential(self):
         npt.assert_array_equal(self.scenario.potential(np.zeros(10)), 0.)
@@ -61,15 +58,15 @@ class TestNDGaussian(unittest.TestCase):
 
 class Test1DGaussianMixture(unittest.TestCase):
 
-    scenario = toy_scenarios.GaussianMixture(means=np.array([0, 1]))
+    scenario = toy_examples.GaussianMixture(means=np.array([0, 1]))
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
         npt.assert_equal(self.scenario.means.shape, (2, 1))
-        npt.assert_equal(self.scenario.covs.shape, (2, 1, 1))
-        npt.assert_equal(self.scenario.precs.shape, (2, 1, 1))
-        npt.assert_equal(self.scenario.sqrt_precs.shape, (2, 1, 1))
-        npt.assert_equal(self.scenario.det_precs.shape, (2,))
+        npt.assert_equal(self.scenario.covariances.shape, (2, 1, 1))
+        npt.assert_equal(self.scenario.precisions.shape, (2, 1, 1))
+        npt.assert_equal(self.scenario.precision_sqrts.shape, (2, 1, 1))
+        npt.assert_equal(self.scenario.precision_dets.shape, (2,))
 
     def test_scalar_potential(self):
         npt.assert_array_equal(self.scenario.potential(0.), self.scenario.potential(1.))
@@ -80,23 +77,23 @@ class Test1DGaussianMixture(unittest.TestCase):
         npt.assert_array_almost_equal(self.scenario.grad_potential(5.), 4.010987)
 
     def test_setcovs(self):
-        self.scenario.covs = np.repeat(np.array([[7.]])[np.newaxis, :, :], 2, axis=0)
-        npt.assert_array_equal(self.scenario.precs, np.repeat(np.array([[1/7.]])[np.newaxis, :, :], 2, axis=0))
-        npt.assert_array_almost_equal(self.scenario.sqrt_precs,
+        self.scenario.covariances = np.repeat(np.array([[7.]])[np.newaxis, :, :], 2, axis=0)
+        npt.assert_array_equal(self.scenario.precisions, np.repeat(np.array([[1 / 7.]])[np.newaxis, :, :], 2, axis=0))
+        npt.assert_array_almost_equal(self.scenario.precision_sqrts,
                                       np.repeat(np.array([[0.37796447]])[np.newaxis, :, :], 2, axis=0))
 
 
 class TestNDGaussianMixture(unittest.TestCase):
 
-    scenario = toy_scenarios.GaussianMixture(means=np.arange(15).reshape(5, 3))
+    scenario = toy_examples.GaussianMixture(means=np.arange(15).reshape(5, 3))
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 3)
         npt.assert_equal(self.scenario.means.shape, (5, 3))
-        npt.assert_equal(self.scenario.covs.shape, (5, 3, 3))
-        npt.assert_equal(self.scenario.precs.shape, (5, 3, 3))
-        npt.assert_equal(self.scenario.sqrt_precs.shape, (5, 3, 3))
-        npt.assert_equal(self.scenario.det_precs.shape, (5,))
+        npt.assert_equal(self.scenario.covariances.shape, (5, 3, 3))
+        npt.assert_equal(self.scenario.precisions.shape, (5, 3, 3))
+        npt.assert_equal(self.scenario.precision_sqrts.shape, (5, 3, 3))
+        npt.assert_equal(self.scenario.precision_dets.shape, (5,))
 
     def test_array_potential(self):
         npt.assert_array_almost_equal(self.scenario.potential(np.zeros(3)), 6.8662534)
@@ -111,7 +108,7 @@ class TestNDGaussianMixture(unittest.TestCase):
 
 class Test1DDoubleWell(unittest.TestCase):
 
-    scenario = toy_scenarios.DoubleWell(1)
+    scenario = toy_examples.DoubleWell(1)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
@@ -131,7 +128,7 @@ class Test1DDoubleWell(unittest.TestCase):
 
 class TestNDDoubleWell(unittest.TestCase):
 
-    scenario = toy_scenarios.DoubleWell(6)
+    scenario = toy_examples.DoubleWell(6)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 6)

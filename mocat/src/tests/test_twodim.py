@@ -11,16 +11,16 @@ import unittest
 import jax.numpy as np
 import numpy.testing as npt
 
-from mocat.src.scenarios.twodim import toy_scenarios
+from mocat.src.scenarios.twodim import toy_examples
 
 
 class TestGaussian(unittest.TestCase):
-    scenario = toy_scenarios.Gaussian()
+    scenario = toy_examples.Gaussian()
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 2)
         npt.assert_array_equal(self.scenario.mean, np.zeros(2))
-        npt.assert_array_equal(self.scenario.cov, np.eye(2))
+        npt.assert_array_equal(self.scenario.covariance, np.eye(2))
 
     def test_vectorise(self):
         self.scenario._vectorise()
@@ -38,7 +38,7 @@ class TestGaussian(unittest.TestCase):
         npt.assert_(self.scenario.xlim[1] > 1)
         npt.assert_(self.scenario.xlim[1] < 5)
 
-        self.scenario.cov = np.array([[10., 9.], [9., 30.]])
+        self.scenario.covariance = np.array([[10., 9.], [9., 50.]])
         self.scenario.auto_axes_lims()
 
         npt.assert_almost_equal(-self.scenario.xlim[0], self.scenario.xlim[1], decimal=4)
@@ -50,11 +50,11 @@ class TestGaussian(unittest.TestCase):
         npt.assert_(self.scenario.ylim[1] > 10)
         npt.assert_(self.scenario.ylim[1] < 20)
 
-        self.scenario.cov = np.eye(2)
+        self.scenario.covariance = np.eye(2)
 
 
 class TestBanana(unittest.TestCase):
-    scenario = toy_scenarios.Banana()
+    scenario = toy_examples.Banana()
     scenario.curviness = 0.03
     scenario.lengthiness = 100
 
@@ -93,7 +93,7 @@ class TestBanana(unittest.TestCase):
 
 
 class TestNealFunnel(unittest.TestCase):
-    scenario = toy_scenarios.NealFunnel()
+    scenario = toy_examples.NealFunnel()
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 2)
@@ -128,26 +128,26 @@ class TestNealFunnel(unittest.TestCase):
 
 
 class TestGaussianMixture(unittest.TestCase):
-    scenario = toy_scenarios.GaussianMixture()
+    scenario = toy_examples.GaussianMixture()
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 2)
         npt.assert_equal(self.scenario.means.ndim, 2)
         npt.assert_equal(self.scenario.means.shape[-1], 2)
-        npt.assert_equal(self.scenario.covs.ndim, 3)
-        npt.assert_equal(self.scenario.covs.shape[-1], 2)
-        npt.assert_equal(self.scenario.precs.ndim, 3)
-        npt.assert_equal(self.scenario.precs.shape[-1], 2)
-        npt.assert_equal(self.scenario.sqrt_precs.ndim, 3)
-        npt.assert_equal(self.scenario.sqrt_precs.shape[-1], 2)
+        npt.assert_equal(self.scenario.covariances.ndim, 3)
+        npt.assert_equal(self.scenario.covariances.shape[-1], 2)
+        npt.assert_equal(self.scenario.precisions.ndim, 3)
+        npt.assert_equal(self.scenario.precisions.shape[-1], 2)
+        npt.assert_equal(self.scenario.precision_sqrts.ndim, 3)
+        npt.assert_equal(self.scenario.precision_sqrts.shape[-1], 2)
 
-    # def test_vectorise(self):
-    #     self.ssm_scenario._vectorise()
-    #     npt.assert_array_almost_equal(self.ssm_scenario.vec_potential(np.arange(6).reshape((3, 2))),
-    #                                   np.array([5.0128746, 3.7238297, 9.724172]))
-    #     npt.assert_array_almost_equal(self.ssm_scenario.vec_potential(np.arange(8).reshape((2, 2, 2))),
-    #                                   np.array([[5.0128746, 3.7238297],
-    #                                             [9.724172, 23.72417]]))
+    def test_vectorise(self):
+        self.scenario._vectorise()
+        npt.assert_array_almost_equal(self.scenario.vec_potential(np.arange(6).reshape((3, 2))),
+                                      np.array([5.0128746, 3.7238297, 9.724172]))
+        npt.assert_array_almost_equal(self.scenario.vec_potential(np.arange(8).reshape((2, 2, 2))),
+                                      np.array([[5.0128746, 3.7238297],
+                                                [9.724172, 23.72417]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
@@ -158,7 +158,7 @@ class TestGaussianMixture(unittest.TestCase):
         npt.assert_(self.scenario.xlim[1] > 1)
         npt.assert_(self.scenario.xlim[1] < 10)
 
-        self.scenario.covs = np.array([[10., 9.], [9., 30.]])
+        self.scenario.covariances = np.array([[10., 9.], [9., 30.]])
         self.test_basic()
 
         self.scenario.auto_axes_lims()
@@ -172,11 +172,11 @@ class TestGaussianMixture(unittest.TestCase):
         npt.assert_(self.scenario.ylim[1] > 11)
         npt.assert_(self.scenario.ylim[1] < 16)
 
-        self.scenario.covs = np.eye(2)
+        self.scenario.covariances = np.eye(2)
 
 
 class TestDoubleWell(unittest.TestCase):
-    scenario = toy_scenarios.DoubleWell()
+    scenario = toy_examples.DoubleWell()
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 2)

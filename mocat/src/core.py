@@ -1,57 +1,20 @@
 ########################################################################################################################
 # Module: core.py
-# Description: mocat primitives Scenario, cdict and Sampler.
+# Description: mocat primitives Scenario and cdict.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from functools import partial
-from typing import Union
-from pathlib import Path
 import pickle
 import copy
+from typing import Union, Callable, Tuple
+from pathlib import Path
+from warnings import warn
 
 import jax.numpy as np
-from jax import grad, jit
+from jax import grad, value_and_grad
 from jax.tree_util import register_pytree_node_class
 from jax.util import unzip2
-
-
-class Scenario:
-    name: str = None
-    dim: int = None
-
-    def __init__(self,
-                 name: str = None,
-                 **kwargs):
-        if name is not None:
-            self.name = name
-
-        for key, value in kwargs.items():
-            if hasattr(self, key):
-                self.__dict__[key] = value
-
-        if self.dim == 1:
-            self._potential = self.potential
-
-            def potential(x):
-                x = np.atleast_1d(x)
-                x = np.reshape(x, (x.size, 1))
-                return np.squeeze(self._potential(x))
-
-            self.potential = potential
-
-        if not hasattr(self, 'grad_potential'):
-            self.grad_potential = grad(self.potential)
-
-    def __repr__(self):
-        return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"
-
-    def potential(self, x: np.ndarray) -> Union[float, np.ndarray]:
-        raise NotImplementedError(f'{self.name} potential not initiated')
-
-    def dens(self, x: np.ndarray) -> Union[float, np.ndarray]:
-        return np.exp(-self.potential(x))
 
 
 @register_pytree_node_class
@@ -87,8 +50,8 @@ class cdict:
 
         out_cdict = self.copy()
         for key, attr in out_cdict.__dict__.items():
-            if isinstance(attr, np.ndarray):
-                out_cdict.__setattr__(key, self.__dict__[key][item])
+            if isinstance(attr, np.ndarray) or (isinstance(attr, cdict) and not isinstance(attr, static_cdict)):
+                out_cdict.__setattr__(key, attr[item])
         return out_cdict
 
     def __add__(self,
@@ -97,11 +60,11 @@ class cdict:
         if other is None:
             return out_cdict
         for key, attr in out_cdict.__dict__.items():
-            if isinstance(attr, np.ndarray) and hasattr(other, key):
+            if hasattr(other, key) and (isinstance(attr, np.ndarray) or isinstance(getattr(other, key), np.ndarray)):
                 attr_atl = attr
                 other_attr_atl = other.__dict__[key]
-                out_cdict.__setattr__(key, np.append(attr_atl,
-                                                     other_attr_atl, axis=0))
+                out_cdict.__setattr__(key, np.append(np.atleast_1d(attr_atl),
+                                                     np.atleast_1d(other_attr_atl), axis=0))
         if hasattr(self, 'time') and hasattr(other, 'time'):
             out_cdict.time = self.time + other.time
         return out_cdict
@@ -115,6 +78,10 @@ class cdict:
 
     def __iter__(self):
         return self.__dict__.__iter__()
+
+
+class static_cdict(cdict):
+    pass
 
 
 def save_cdict(in_cdict: cdict,
@@ -150,31 +117,137 @@ def load_cdict(path: Union[str, Path]) -> cdict:
     return data
 
 
-class Sampler:
-    parameters: cdict
+def impl_checkable(func: Callable) -> Callable:
+    func.not_implemented = True
+    return func
+
+
+def is_implemented(func):
+    return not hasattr(func, 'not_implemented')
+
+
+def clean_1d(scen, attr):
+    if hasattr(scen, attr) and is_implemented(getattr(scen, attr)):
+        setattr(scen, '_' + attr, getattr(scen, attr))
+
+        def cleaned_func(x: Union[np.ndarray, float],
+                         random_key: np.ndarray) -> float:
+            x = np.atleast_1d(x)
+            x = np.reshape(x, (x.size, 1))
+            return np.squeeze(getattr(scen, '_' + attr)(x, random_key))
+
+        setattr(scen, attr, cleaned_func)
+
+
+class Scenario:
+    name: str
+    dim: int
+    temperature: float
+
+    grad_potential: Callable[[np.ndarray, np.ndarray], np.ndarray]
+    potential_and_grad: Callable[[np.ndarray, np.ndarray], Tuple[float, np.ndarray]]
+    grad_prior_potential: Callable[[np.ndarray, np.ndarray], np.ndarray]
+    prior_potential_and_grad: Callable[[np.ndarray, np.ndarray], Tuple[float, np.ndarray]]
+    grad_likelihood_potential: Callable[[np.ndarray, np.ndarray], np.ndarray]
+    likelihood_potential_and_grad: Callable[[np.ndarray, np.ndarray], Tuple[float, np.ndarray]]
+
+    grad_tempered_potential: Callable[[np.ndarray, float, np.ndarray], np.ndarray]
+    tempered_potential_and_grad: Callable[[np.ndarray, float, np.ndarray], Tuple[float, np.ndarray]]
 
     def __init__(self,
                  name: str = None,
+                 init_grad: bool = True,
                  **kwargs):
-
-        if not hasattr(self, 'parameters'):
-            self.parameters = cdict()
-
         if name is not None:
             self.name = name
-        elif not hasattr(self, 'name'):
-            self.name = "Sampler"
 
-        if self.parameters is not None:
-            self.parameters.__dict__.update(kwargs)
+        for key, value in kwargs.items():
+            if hasattr(self, key):
+                self.__dict__[key] = value
+
+        if is_implemented(self.potential) or is_implemented(self.likelihood_potential):
+            if self.dim == 1:
+                clean_1d(self, 'potential')
+                clean_1d(self, 'prior_potential')
+                clean_1d(self, 'likelihood_potential')
+
+            if is_implemented(self.likelihood_potential):
+                if not is_implemented(self.prior_potential):
+                    warn(f'{self.name} prior_potential not initiated, assuming uniform')
+                    self.prior_potential = lambda x, random_key=None: 0.
+
+                if not hasattr(self, 'temperature'):
+                    self.temperature = 1.
+
+                self.tempered_potential \
+                    = lambda x, temperature, random_key=None: self.prior_potential(x, random_key) \
+                                                              + temperature * self.likelihood_potential(x, random_key)
+
+                self.potential = lambda x, random_key=None: self.tempered_potential(x, self.temperature, random_key)
+
+        if init_grad:
+            self.init_grad()
+
+    def init_grad(self):
+        if is_implemented(self.likelihood_potential):
+            self.grad_prior_potential = grad(self.prior_potential)
+            self.prior_potential_and_grad = value_and_grad(self.prior_potential)
+
+            self.grad_likelihood_potential = grad(self.likelihood_potential)
+            self.likelihood_potential_and_grad = value_and_grad(self.likelihood_potential)
+
+            self.grad_tempered_potential \
+                = lambda x, temperature, random_key=None: self.grad_prior_potential(x, random_key) \
+                                                          + temperature * self.grad_likelihood_potential(x, random_key)
+
+            def tempered_potential_and_grad(x: np.ndarray,
+                                            temperature: float,
+                                            random_key: np.ndarray) -> Tuple[float, np.ndarray]:
+                prior_pot, prior_grad = self.prior_potential_and_grad(x, random_key)
+                lik_pot, lik_grad = self.likelihood_potential_and_grad(x, random_key)
+                return prior_pot + temperature * lik_pot, \
+                       prior_grad + temperature * lik_grad
+
+            self.tempered_potential_and_grad = tempered_potential_and_grad
+
+            self.grad_potential = lambda x, random_key=None: self.grad_tempered_potential(x,
+                                                                                          self.temperature,
+                                                                                          random_key)
+            self.potential_and_grad = lambda x, random_key=None: self.tempered_potential_and_grad(x,
+                                                                                                  self.temperature,
+                                                                                                  random_key)
+
+        elif is_implemented(self.potential):
+            self.grad_potential = grad(self.potential)
+            self.potential_and_grad = value_and_grad(self.potential)
 
     def __repr__(self):
-        return f"mocat.Sampler.{self.__class__.__name__}({self.__dict__.__repr__()})"
+        return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"
 
-    def deepcopy(self) -> 'Sampler':
-        return copy.deepcopy(self)
+    @impl_checkable
+    def potential(self, x: np.ndarray,
+                  random_key: np.ndarray = None) -> float:
+        raise AttributeError(f'{self.name} potential not initiated')
 
-    def startup(self,
-                scenario: Scenario,
-                random_key: np.ndarray):
-        pass
+    @impl_checkable
+    def prior_potential(self,
+                        x: np.ndarray,
+                        random_key: np.ndarray = None) -> float:
+        raise AttributeError(f'{self.name} prior_potential not initiated')
+
+    @impl_checkable
+    def prior_sample(self,
+                     random_key: np.ndarray) -> Union[float, np.ndarray]:
+        raise AttributeError(f'{self.name} prior_sample not initiated')
+
+    @impl_checkable
+    def likelihood_potential(self,
+                             x: np.ndarray,
+                             random_key: np.ndarray = None) -> float:
+        raise AttributeError(f'{self.name} prior_potential not initiated')
+
+    @impl_checkable
+    def likelihood_sample(self,
+                          x: np.ndarray,
+                          random_key: np.ndarray) -> np.ndarray:
+        raise AttributeError(f'{self.name} likelihood_sample not initiated')

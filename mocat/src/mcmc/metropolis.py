@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: mcmc/corrections.py
+# Module: mcmc/metropolis.py
 # Description: Correction mechanisms for MCMC samplers.
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -8,108 +8,42 @@
 from typing import Tuple, Union, Type
 from inspect import isclass
 
-from jax import random, vmap, numpy as np
+from jax import random, numpy as np
 from jax.lax import cond
-from jax.ops import index_update
 
 from mocat.src.core import cdict, Scenario
-from mocat.src.mcmc.sampler import MCMCSampler
-from mocat.src.abc.abc import ABCSampler
+from mocat.src.mcmc.sampler import MCMCSampler, Correction
 
 
-class Correction:
+def mh_acceptance_probability(sampler: MCMCSampler,
+                              scenario: Scenario,
+                              reject_state: cdict, reject_extra: cdict,
+                              proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
+    pre_min_alpha = np.exp(- proposed_state.potential
+                           + reject_state.potential
+                           - sampler.proposal_potential(scenario,
+                                                        proposed_state, proposed_extra,
+                                                        reject_state, reject_extra)
+                           + sampler.proposal_potential(scenario,
+                                                        reject_state, reject_extra,
+                                                        proposed_state, proposed_extra))
 
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-
-    def __repr__(self):
-        return f'mocat.Correction.{self.__class__.__name__}'
-
-    def startup(self,
-                scenario: Scenario,
-                sampler: MCMCSampler,
-                initial_state: cdict,
-                inital_extra: cdict) -> Tuple[cdict, cdict]:
-        return initial_state, inital_extra
-
-    def correct(self,
-                scenario: Scenario,
-                sampler: MCMCSampler,
-                reject_state: cdict,
-                reject_extra: cdict,
-                proposed_state: cdict,
-                proposed_extra: cdict) -> Tuple[cdict, cdict]:
-        raise NotImplementedError
-
-    def __call__(self,
-                 scenario: Scenario,
-                 sampler: MCMCSampler,
-                 reject_state: cdict,
-                 reject_extra: cdict,
-                 proposed_state: cdict,
-                 proposed_extra: cdict) -> Tuple[cdict, cdict]:
-        return self.correct(scenario, sampler,
-                            reject_state, reject_extra,
-                            proposed_state, proposed_extra)
-
-
-class Uncorrected(Correction):
-
-    def correct(self,
-                scenario: Scenario,
-                sampler: MCMCSampler,
-                reject_state: cdict,
-                reject_extra: cdict,
-                proposed_state: cdict,
-                proposed_extra: cdict) -> Tuple[cdict, cdict]:
-        return proposed_state, proposed_extra
-
-
-def update_prior_potential(scenario: Scenario,
-                           state: cdict,
-                           extra: cdict) -> cdict:
-    state.prior_potential = scenario.prior_potential(state.value)
-    return state
-
-
-def update_ensemble_potential(scenario: Scenario,
-                              state: cdict,
-                              extra: cdict) -> cdict:
-    ensemble_index = extra.iter % extra.parameters.n_ensemble
-    state.potential = index_update(state.potential, ensemble_index,
-                                   scenario.potential(state.value[ensemble_index]))
-    return state
-
-
-def update_potential(scenario: Scenario,
-                     state: cdict,
-                     extra: cdict) -> cdict:
-    state.potential = scenario.potential(state.value)
-    return state
+    return np.minimum(1., pre_min_alpha)
 
 
 class Metropolis(Correction):
 
-    def __init__(self):
-        super().__init__()
-        self._update_potential = None
-
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
+                n: int,
+                random_key: np.ndarray,
                 initial_state: cdict,
-                initial_extra: cdict) -> Tuple[cdict, cdict]:
+                initial_extra: cdict,
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
         initial_state.alpha = 1.
-
-        if isinstance(sampler, ABCSampler):
-            initial_state.prior_potential = scenario.prior_potential(initial_state.value)
-            self._update_potential = update_prior_potential
-        elif initial_state.value.ndim == 2:
-            initial_state.potential = vmap(scenario.potential)(initial_state.value)
-            self._update_potential = update_ensemble_potential
-        else:
-            initial_state.potential = scenario.potential(initial_state.value)
-            self._update_potential = update_potential
         return initial_state, initial_extra
 
     def correct(self,
@@ -119,8 +53,6 @@ class Metropolis(Correction):
                 reject_extra: cdict,
                 proposed_state: cdict,
                 proposed_extra: cdict) -> Tuple[cdict, cdict]:
-        proposed_state = self._update_potential(scenario, proposed_state, proposed_extra)
-
         alpha = sampler.acceptance_probability(scenario,
                                                reject_state, reject_extra,
                                                proposed_state, proposed_extra)
@@ -145,7 +77,7 @@ class RMMetropolis(Correction):
                  super_correction: Union[Correction, Type[Correction]] = Metropolis(),
                  adapt_cut_off: int = np.inf,
                  rm_stepsize_scale: float = 1.,
-                 rm_stepsize_neg_exponent: float = 0.75,
+                 rm_stepsize_neg_exponent: float = 2 / 3,
                  log_update: bool = True):
         super().__init__()
         self.super_correction = super_correction() if isclass(super_correction) else super_correction
@@ -160,18 +92,23 @@ class RMMetropolis(Correction):
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
+                n: int,
+                random_key: np.ndarray,
                 initial_state: cdict,
-                initial_extra: cdict) -> Tuple[cdict, cdict]:
+                initial_extra: cdict,
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
         # Set tuning parameter (i.e. stepsize) to 2.38^2/d if not initiated and adaptive
         if hasattr(sampler.parameters, sampler.tuning.parameter) \
                 and getattr(sampler.parameters, sampler.tuning.parameter) is None:
-            setattr(sampler.parameters, sampler.tuning.parameter, 2.38 ** 2 / scenario.dim)
             setattr(initial_extra.parameters, sampler.tuning.parameter, 2.38 ** 2 / scenario.dim)
 
         setattr(initial_state, sampler.tuning.parameter, getattr(initial_extra.parameters,
                                                                  sampler.tuning.parameter))
 
-        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, initial_state, initial_extra)
+        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, n, random_key,
+                                                                     initial_state, initial_extra, **kwargs)
 
         sampler.tuning.monotonicity = 1 if sampler.tuning.monotonicity in (1, 'increasing') else -1
 
@@ -224,3 +161,4 @@ class RMMetropolis(Correction):
                                                           monotonicity,
                                                           rm_stepsize)
         return np.exp(new_log_param)
+

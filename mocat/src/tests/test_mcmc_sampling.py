@@ -12,28 +12,30 @@ from jax.random import PRNGKey
 import numpy.testing as npt
 
 from mocat.src.core import cdict
-from mocat.src.scenarios import toy_scenarios
-from mocat.src.mcmc.run import run_mcmc
+from mocat.src.scenarios.twodim import toy_examples
 from mocat.src.mcmc.metrics import ess, acceptance_rate
-from mocat.src.mcmc import standard_mcmc, ensemble_mcmc
-from mocat.src.mcmc.corrections import RMMetropolis
+from mocat.src.mcmc import standard_mcmc
+from mocat.src.mcmc.metropolis import Metropolis, RMMetropolis
+from mocat.src.sample import run
 
 
 class TestMetropolisCorrelatedGaussian(unittest.TestCase):
 
-    scenario_cov = np.array([[1., 0.9], [0.9, 2.]])
-    scenario = toy_scenarios.Gaussian(cov=scenario_cov)
-    n = int(1e5)
-
     sampler = None
 
     def __init__(self, *args, **kwargs):
+
         super().__init__(*args, **kwargs)
+
+        self.scenario_cov = np.array([[1., 0.9], [0.9, 2.]])
+        self.scenario = toy_examples.Gaussian(covariance=self.scenario_cov)
+        self.n = int(1e5)
 
         self.__test__ = self.sampler is not None
         if self.__test__:
-            self.adapt_sample = run_mcmc(self.scenario, self.sampler, self.n, PRNGKey(0), correction=RMMetropolis())
-            self.warmstart_sample = run_mcmc(self.scenario, self.sampler, self.n, PRNGKey(0))
+            self.adapt_sample = run(self.scenario, self.sampler, self.n, PRNGKey(0), correction=RMMetropolis())
+            self.sampler.parameters.stepsize = self.adapt_sample.stepsize[-1]
+            self.warmstart_sample = run(self.scenario, self.sampler, self.n, PRNGKey(0), correction=Metropolis)
 
     def _test_mean(self,
                    sample: cdict):
@@ -84,6 +86,7 @@ class TestRandomWalkCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
         self._test_cov(self.warmstart_sample)
 
     def test_acceptance_rate(self):
+        self._test_acceptance_rate(self.adapt_sample)
         self._test_acceptance_rate(self.warmstart_sample)
 
     def test_ess(self):
@@ -132,44 +135,6 @@ class TestHMCCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
 class TestUnderdampedCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
     sampler = standard_mcmc.Underdamped(leapfrog_steps=3,
                                         friction=1.)
-
-    def test_mean(self):
-        self._test_mean(self.adapt_sample)
-        self._test_mean(self.warmstart_sample)
-
-    def test_cov(self):
-        self._test_cov(self.adapt_sample)
-        self._test_cov(self.warmstart_sample)
-
-    def test_acceptance_rate(self):
-        self._test_acceptance_rate(self.warmstart_sample)
-
-    def test_ess(self):
-        self._test_ess(self.adapt_sample)
-        self._test_ess(self.warmstart_sample)
-
-
-class TestEnsRandomWalkCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
-    sampler = ensemble_mcmc.EnsembleRWMH(n_ensemble=10)
-
-    def test_mean(self):
-        self._test_mean(self.adapt_sample)
-        self._test_mean(self.warmstart_sample)
-
-    def test_cov(self):
-        self._test_cov(self.adapt_sample)
-        self._test_cov(self.warmstart_sample)
-
-    def test_acceptance_rate(self):
-        self._test_acceptance_rate(self.warmstart_sample)
-
-    def test_ess(self):
-        self._test_ess(self.adapt_sample)
-        self._test_ess(self.warmstart_sample)
-
-
-class TestEnsOverdampedCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
-    sampler = ensemble_mcmc.EnsembleOverdamped(n_ensemble=10)
 
     def test_mean(self):
         self._test_mean(self.adapt_sample)

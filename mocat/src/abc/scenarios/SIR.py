@@ -64,9 +64,9 @@ class SIR(ABCScenario):
                         x: np.ndarray) -> Union[float, np.ndarray]:
         return (self.prior_rates * x).sum()
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def simulate_times_and_si(self,
+                              x: np.ndarray,
+                              random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return sir_simulate(self.initial_si, x, self.initial_si.sum(),
                             random_key, max_iter=self.max_iter)
 
@@ -89,7 +89,7 @@ class TransformedSIR(SIR):
                         x: np.ndarray) -> Union[float, np.ndarray]:
         return (self.prior_rates * np.exp(x) - x).sum()
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+    def simulate_times_and_si(self,
+                              x: np.ndarray,
+                              random_key: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
         return super().likelihood_sample(self.constrain(x), random_key)

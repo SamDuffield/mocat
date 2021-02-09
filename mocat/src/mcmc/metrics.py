@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: metrics.py
-# Description: Some common metrics to assess sample quality.
+# Description: Some common metrics to assess run quality.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################

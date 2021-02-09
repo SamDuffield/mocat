@@ -5,9 +5,10 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
+from abc import ABC as AbsBaseClass
 from typing import Union
 
-from jax import numpy as np, random
+from jax import numpy as np, random, vmap
 from jax.scipy.stats import norm
 
 from mocat.src.abc.abc import ABCScenario
@@ -15,7 +16,31 @@ from mocat.src.abc.abc import ABCScenario
 buffer = 1e-5
 
 
-class GKUniformPrior(ABCScenario):
+class _GK(ABCScenario):
+    unsummarised_data: np.ndarray
+
+    def single_likelihood_sample(self,
+                                 x: np.ndarray,
+                                 random_key: np.ndarray) -> np.ndarray:
+        raise NotImplementedError(f'{self.name} single_likelihood_sample not implemented')
+
+    def full_data_sample(self,
+                         x: np.ndarray,
+                         random_key: np.ndarray) -> np.ndarray:
+        data_keys = random.split(random_key, self.unsummarised_data.shape[0])
+        return vmap(self.single_likelihood_sample, (None, 0))(x, data_keys)
+
+    def summarise_data(self,
+                       data: np.ndarray) -> np.ndarray:
+        raise NotImplementedError(f'{self.name} summarise_data not implemented')
+
+    def likelihood_sample(self,
+                          x: np.ndarray,
+                          random_key: np.ndarray) -> np.ndarray:
+        return self.summarise_data(self.full_data_sample(x, random_key))
+
+
+class GKUniformPrior(_GK, AbsBaseClass):
     name = 'GK_old'
     dim = 4
 
@@ -24,9 +49,9 @@ class GKUniformPrior(ABCScenario):
     prior_mins = 0
     prior_maxs = 10
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
+    def single_likelihood_sample(self,
+                                 x: np.ndarray,
+                                 random_key: np.ndarray) -> np.ndarray:
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)
         expmingz = np.exp(-x[2] * z)
@@ -45,7 +70,7 @@ class GKUniformPrior(ABCScenario):
         return self.prior_mins + random.uniform(random_key, (self.dim,)) * (self.prior_maxs - self.prior_mins)
 
 
-class GKTransformedUniformPrior(ABCScenario):
+class GKTransformedUniformPrior(_GK, AbsBaseClass):
     name = 'GK_old'
     dim = 4
 
@@ -62,9 +87,9 @@ class GKTransformedUniformPrior(ABCScenario):
                     constrained_x: np.ndarray):
         return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
+    def single_likelihood_sample(self,
+                                 x: np.ndarray,
+                                 random_key: np.ndarray) -> np.ndarray:
         transformed_x = self.constrain(x)
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)
@@ -82,7 +107,7 @@ class GKTransformedUniformPrior(ABCScenario):
         return random.normal(random_key, (self.dim,))
 
 
-class GKOnlyAUniformPrior(ABCScenario):
+class GKOnlyAUniformPrior(_GK, AbsBaseClass):
     name = 'GK_old only A'
     dim = 1
 
@@ -94,9 +119,9 @@ class GKOnlyAUniformPrior(ABCScenario):
     prior_mins = 0
     prior_maxs = 10
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
+    def single_likelihood_sample(self,
+                                 x: np.ndarray,
+                                 random_key: np.ndarray) -> np.ndarray:
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)
         expmingz = np.exp(-self.g * z)
@@ -115,7 +140,7 @@ class GKOnlyAUniformPrior(ABCScenario):
         return self.prior_mins + random.uniform(random_key, (self.dim,)) * (self.prior_maxs - self.prior_mins)
 
 
-class GKOnlyATransformedUniformPrior(ABCScenario):
+class GKOnlyATransformedUniformPrior(_GK, AbsBaseClass):
     name = 'GK_old only A'
     dim = 1
 
@@ -135,9 +160,9 @@ class GKOnlyATransformedUniformPrior(ABCScenario):
                     constrained_x: np.ndarray):
         return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
 
-    def likelihood_sample(self,
-                          x: np.ndarray,
-                          random_key: np.ndarray) -> np.ndarray:
+    def single_likelihood_sample(self,
+                                 x: np.ndarray,
+                                 random_key: np.ndarray) -> np.ndarray:
         transformed_x = self.constrain(x)
         u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
         z = norm.ppf(u)

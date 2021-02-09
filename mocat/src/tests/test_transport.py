@@ -7,21 +7,23 @@
 
 
 import unittest
+from typing import Tuple
 
-import jax.numpy as np
-from jax.random import PRNGKey
+from jax import numpy as np, random
 import numpy.testing as npt
 
 from mocat.src.core import cdict
-from mocat.src.scenarios import toy_scenarios
-from mocat.src.smc_samplers import run_smc_sampler
-from mocat.src.svgd import run_svgd, median_bandwidth_update, mean_bandwidth_update
+from mocat.src.sample import run
+from mocat.src.scenarios.twodim import toy_examples
+from mocat.src.transport.smc import MetropolisedSMCSampler
+from mocat.src.transport.svgd import SVGD
+from mocat.src.kernels import median_bandwidth_update, mean_bandwidth_update
 from mocat.src.mcmc.standard_mcmc import RandomWalk, Overdamped
 
 
 class TestCorrelatedGaussian(unittest.TestCase):
     scenario_cov = np.array([[1., 0.9], [0.9, 2.]])
-    scenario = toy_scenarios.Gaussian(cov=scenario_cov)
+    scenario = toy_examples.Gaussian(covariance=scenario_cov)
     n = int(1e4)
 
     def _test_mean(self,
@@ -48,48 +50,104 @@ class TestSVGD(TestCorrelatedGaussian):
     n_iter = int(1e3)
 
     def test_fixed_kernel_params(self):
-        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=0.8)
+        class SVGD_fixed(SVGD):
+            def adapt(self,
+                      ensemble_state: cdict,
+                      ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+                return ensemble_state, ensemble_extra
+
+        sample = run(self.scenario, SVGD_fixed(max_iter=self.n_iter, stepsize=0.8),
+                     n=self.n,
+                     random_key=random.PRNGKey(0))
         self._test_mean(sample[-1])
         self._test_cov(sample[-1])
 
     def test_median_update(self):
-        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=1.0,
-                          kernel_param_update=median_bandwidth_update)
+        class SVGD_median(SVGD):
+            def adapt(self,
+                      ensemble_state: cdict,
+                      ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+                ensemble_extra.parameters.kernel_params.bandwidth = median_bandwidth_update(ensemble_state.value)
+                ensemble_state.kernel_params = ensemble_extra.parameters.kernel_params
+                return ensemble_state, ensemble_extra
+
+        sample = run(self.scenario, SVGD_median(max_iter=self.n_iter, stepsize=1.0),
+                     n=self.n,
+                     random_key=random.PRNGKey(0))
+
         self._test_mean(sample[-1])
         self._test_cov(sample[-1])
 
     def test_mean_update(self):
-        sample = run_svgd(self.scenario, self.n_iter, n_samps=self.n, stepsize=1.3,
-                          kernel_param_update=mean_bandwidth_update)
+        class SVGD_mean(SVGD):
+            def adapt(self,
+                      ensemble_state: cdict,
+                      ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+                ensemble_extra.parameters.kernel_params.bandwidth = mean_bandwidth_update(ensemble_state.value)
+                ensemble_state.kernel_params = ensemble_extra.parameters.kernel_params
+                return ensemble_state, ensemble_extra
+
+        sample = run(self.scenario, SVGD_mean(max_iter=self.n_iter, stepsize=1.0),
+                     n=self.n,
+                     random_key=random.PRNGKey(0))
+
+        self._test_mean(sample)
+        self._test_cov(sample)
+
+    def test_callable_stepsize(self):
+        sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=lambda i: i ** -0.5),
+                     n=self.n,
+                     random_key=random.PRNGKey(0))
+
         self._test_mean(sample)
         self._test_cov(sample)
 
 
-class TestSMC(TestCorrelatedGaussian):
+class TestMetropolisedSMC(TestCorrelatedGaussian):
+    preschedule = np.arange(0., 1.1, 0.1)
+
+    def resample_final(self,
+                       sample: cdict) -> cdict:
+        unweighted_vals = sample.value[-1, random.categorical(random.PRNGKey(1),
+                                                              logits=sample.log_weight[-1], shape=(self.n,))]
+        unweighted_sample = cdict(value=unweighted_vals)
+        return unweighted_sample
 
     def test_tempered_preschedule_RW(self):
-        preschedule = np.arange(0., 1.1, 0.1)
-        sample = run_smc_sampler(self.scenario, self.n, PRNGKey(0), RandomWalk(stepsize=1.0), preschedule=preschedule)
-        self._test_mean(sample[-1])
-        self._test_cov(sample[-1])
-        npt.assert_array_equal(sample.weight_schedule, preschedule[1:])
+        sample = run(self.scenario, MetropolisedSMCSampler(RandomWalk(stepsize=1.0)),
+                     self.n,
+                     random_key=random.PRNGKey(0),
+                     temperature_schedule=self.preschedule)
+        unweighted_sample = self.resample_final(sample)
+        self._test_mean(unweighted_sample)
+        self._test_cov(unweighted_sample)
+        npt.assert_array_equal(sample.temperature, self.preschedule[1:])
 
     def test_tempered_preschedule_OD(self):
-        preschedule = np.arange(0., 1.1, 0.1)
-        sample = run_smc_sampler(self.scenario, self.n, PRNGKey(0), Overdamped(stepsize=1.0), preschedule=preschedule)
-        self._test_mean(sample[-1])
-        self._test_cov(sample[-1])
-        npt.assert_array_equal(sample.weight_schedule, preschedule[1:])
+        sample = run(self.scenario, MetropolisedSMCSampler(Overdamped(stepsize=1.0)),
+                     self.n,
+                     random_key=random.PRNGKey(0),
+                     temperature_schedule=self.preschedule)
+        unweighted_sample = self.resample_final(sample)
+        self._test_mean(unweighted_sample)
+        self._test_cov(unweighted_sample)
+        npt.assert_array_equal(sample.temperature, self.preschedule[1:])
 
     def test_tempered_adaptive_RW(self):
-        sample = run_smc_sampler(self.scenario, self.n, PRNGKey(0), RandomWalk(stepsize=1.0))
-        self._test_mean(sample[-1])
-        self._test_cov(sample[-1])
+        sample = run(self.scenario, MetropolisedSMCSampler(RandomWalk(stepsize=1.0)),
+                     self.n,
+                     random_key=random.PRNGKey(0))
+        unweighted_sample = self.resample_final(sample)
+        self._test_mean(unweighted_sample)
+        self._test_cov(unweighted_sample)
 
     def test_tempered_adaptive_OD(self):
-        sample = run_smc_sampler(self.scenario, self.n, PRNGKey(0), Overdamped(stepsize=1.0))
-        self._test_mean(sample[-1])
-        self._test_cov(sample[-1])
+        sample = run(self.scenario, MetropolisedSMCSampler(Overdamped(stepsize=1.0)),
+                     self.n,
+                     random_key=random.PRNGKey(0))
+        unweighted_sample = self.resample_final(sample)
+        self._test_mean(unweighted_sample)
+        self._test_cov(unweighted_sample)
 
 
 if __name__ == '__main__':

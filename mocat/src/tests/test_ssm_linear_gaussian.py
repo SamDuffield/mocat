@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: ssm/tests/test_linear_gaussian.py
+# Module: ssm/tests/test_ssm_linear_gaussian.py
 # Description: Tests for linear TemporalGaussian state space models (and Kalman filtering/smoothing).
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -8,7 +8,7 @@
 import unittest
 
 import jax.numpy as np
-from mocat.src.ssm.tests.tests_ssm import TestSSM
+from mocat.src.tests.test_ssm import TestSSM
 from mocat.src.ssm.linear_gaussian.linear_gaussian import TimeHomogenousLinearGaussian
 
 

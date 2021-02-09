@@ -68,7 +68,7 @@ class LotkaVolterra(ABCScenario):
                         x: np.ndarray) -> Union[float, np.ndarray]:
         return (self.prior_rates * x).sum()
 
-    def simulate_data(self,
+    def likelihood_sample(self,
                       x: np.ndarray,
                       random_key: np.ndarray) -> np.ndarray:
         return lotka_volterra_simulate(self.initial_prey_pred, self.times, x, random_key, max_iter=self.max_iter)[:, 0]
@@ -95,4 +95,4 @@ class TransformedLotkaVolterra(LotkaVolterra):
     def simulate_data(self,
                       x: np.ndarray,
                       random_key: np.ndarray) -> np.ndarray:
-        return super().simulate_data(self.constrain(x), random_key)
+        return super().likelihood_sample(self.constrain(x), random_key)

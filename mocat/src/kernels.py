@@ -6,15 +6,17 @@
 ########################################################################################################################
 
 from typing import Union
+from copy import deepcopy
 from functools import partial
 
-import jax.numpy as np
-from jax import jit
+from jax import jit, numpy as np
 
 from mocat.src.core import cdict
+from mocat.src.utils import l2_distance_matrix
 
 
 class Kernel:
+    parameters: cdict
 
     def __init__(self, **kwargs):
         if not hasattr(self, 'parameters'):
@@ -214,3 +216,16 @@ class IMQ(Kernel):
         base = c + 0.5 * np.sum(np.square(diff), axis=-1)
         return (- beta * np.power(base, beta - 1) + beta * (beta - 1) * diff ** 2 * np.power(base, beta - 2)) \
                / bandwidth ** 2
+
+
+def median_bandwidth_update(vals: np.ndarray) -> float:
+    # Note jax.numpy.median scales much worse than numpy.median,
+    # thus this method is not currently recommended
+    dist_mat = l2_distance_matrix(vals)
+    return np.median(dist_mat) / np.sqrt(2 * np.log(dist_mat.shape[0]))
+
+
+def mean_bandwidth_update(vals: np.ndarray) -> float:
+    dist_mat = l2_distance_matrix(vals)
+    return np.mean(dist_mat) / np.sqrt(2 * np.log(dist_mat.shape[0]))
+

@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: twodim/vectorise.py
-# Description: Two dimensional ssm_scenario class - vectorises potentials (that aren't already)
+# Description: Two dimensional scenario class - vectorises potentials (that aren't already)
 #              and automatically finds limits for plotting.
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -17,22 +17,22 @@ from mocat.src.core import Scenario
 def _flex_vectorise(func: Callable):
     try:
         # Check if already vectorised
-        test_eval = func(np.zeros((3, 2)))
+        test_eval = func(np.zeros((3, 2)), None)
         if test_eval.shape != (3, ):
             raise TypeError
     except:
         # Attempt to vectorise
-        def vec_function(arr):
+        def vec_function(arr, rk=None):
             if arr.ndim == 1 and arr.shape[-1] == 2:
-                return func(arr)
+                return func(arr, rk)
             elif arr.ndim == 2 and arr.shape[-1] == 2:
-                return func(arr.transpose())
+                return func(arr.transpose(), rk)
             elif arr.ndim == 3 and arr.shape[-1] == 2:
-                return func(arr.transpose((2, 0, 1)))
+                return func(arr.transpose((2, 0, 1)), rk)
             else:
                 raise TypeError('Array of incorrect dimension for vectorisation')
 
-        test_eval = vec_function(np.zeros((3, 2)))
+        test_eval = vec_function(np.zeros((3, 2)), None)
         if test_eval.shape != (3, ):
             raise TypeError('Scenario potential vectorised successfully but failed sanity check')
 
@@ -76,16 +76,17 @@ def auto_axes_lims(vec_dens: Callable,
 
     # Initial evaluation grid
     ix, iy, grid = _generate_plot_grid([-xlim, xlim], [-ylim, ylim], resolution=100, linspace=True)
-    # with np.errstate(divide='ignore'):
-    #     z = vec_dens(grid)
     z = vec_dens(grid)
 
-    # Find mode and find area with probability mass
+    # Find mode
     max_z = np.max(z)
+    if np.isnan(max_z):
+        raise TypeError('nan found attempting auto_axes_lims, try giving manual xlim and ylim as kwargs')
 
     if max_z == 0.:
         return auto_axes_lims(vec_dens, xlim=xlim/1.5, ylim=ylim/1.5)
 
+    # Area with probability mass
     z_keep = z > max_z / 10
 
     # Find bounds of area with probability mass
@@ -109,7 +110,7 @@ def _plot_densf(ax, x, y, z, **kwargs):
     return ax.contourf(x, y, z, **kwargs)
 
 
-class TwoDimScenario(Scenario):
+class TwoDimToyScenario(Scenario):
 
     dim = 2
     xlim = None
@@ -118,9 +119,14 @@ class TwoDimScenario(Scenario):
     vec_potential = None
     plot_resolution = 1000
 
+    def prior_potential(self,
+                        x: np.ndarray,
+                        random_key: np.ndarray = None) -> float:
+        return 0.
+
     def _vectorise(self):
         self.vec_potential = _flex_vectorise(self.potential)
-        self.vec_dens = lambda x: np.exp(-self.vec_potential(x))
+        self.vec_dens = lambda x, rk = None: np.exp(-self.vec_potential(x, rk))
 
     def auto_axes_lims(self, vectorise=True):
         if vectorise:

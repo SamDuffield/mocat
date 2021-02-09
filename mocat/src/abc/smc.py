@@ -5,244 +5,240 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-
-from typing import Union, Tuple, Callable, Type
-from time import time
+from typing import Union, Tuple, Type
+from inspect import isclass
 
 from jax import numpy as np, random, vmap
-from jax.lax import scan
+from jax.lax import cond, scan
 
-from mocat.src.abc.abc import ABCSampler, ABCScenario
-from mocat.src.abc.standard_abc import RandomWalkABC
-from mocat.src.core import cdict
-from mocat.src.utils import while_loop_stacked
-from mocat.src.mcmc.corrections import Correction, Metropolis
-from mocat.src.smc_samplers import default_post_mcmc_update
-from mocat.src.mcmc.run import startup_mcmc, check_correction
-
-
-def default_post_metropolis_abc_mcmc_update(previous_full_state: cdict,
-                                            previous_full_extra: cdict,
-                                            new_enlarged_state: cdict,
-                                            new_enlarged_extra: cdict) -> Tuple[cdict, cdict]:
-    new_full_state = new_enlarged_state[:, -1]
-    new_full_extra = new_enlarged_extra[:, -1]
-    new_full_extra.parameters = new_full_extra.parameters[:, -1]
-    new_full_state.alpha = new_enlarged_state.alpha.mean(1)
-
-    d = new_full_state.value.shape[-1]
-    new_full_extra.parameters.stepsize = vmap(np.cov, (1,))(new_full_state.value) / d * 2.38 ** 2
-    # new_full_extra.parameters.stepsize = vmap(np.cov, (1,))(new_full_state.value)
-
-    new_full_extra.parameters.threshold = new_full_extra.parameters.threshold[-1, -1]
-    return new_full_state, new_full_extra
+from mocat.src.abc.abc import ABCScenario, ABCSampler
+from mocat.src.abc.mcmc import ABCMCMCSampler, RandomWalkABC
+from mocat.src.core import cdict, is_implemented
+from mocat.src.transport.smc import SMCSampler
+from mocat.src.transport.sampler import TransportSampler
+from mocat.src.mcmc.sampler import Correction, check_correction
 
 
-def run_abc_smc_sampler(abc_scenario: ABCScenario,
-                        n_samps: int,
-                        random_key: np.ndarray,
-                        mcmc_sampler: ABCSampler = None,
-                        mcmc_correction: Union[None, str, Correction, Type[Correction]] = 'sampler_default',
-                        mcmc_steps: int = 10,
-                        preschedule: np.ndarray = None,
-                        initial_state: cdict = None,
-                        initial_extra: cdict = None,
-                        post_mcmc_update: Callable = default_post_mcmc_update,
-                        max_iter: int = 100,
-                        threshold_quantile_retain: float = 0.75,
-                        continuation_func: Callable = None,
-                        name: str = None) -> cdict:
-    if initial_state is None:
-        random_key, sub_key = random.split(random_key)
-        x0 = vmap(abc_scenario.prior_sample)(random.split(sub_key, n_samps))
-        initial_state = cdict(value=x0)
+class ABCSMCSampler(ABCSampler, SMCSampler):
+    name = "ABC SMC"
 
-    if mcmc_sampler is None:
-        mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value) / abc_scenario.dim * 2.38 ** 2,
-                                     threshold=np.inf)
-        # mcmc_sampler = RandomWalkABC(stepsize=vmap(np.cov, (1,))(initial_state.value), threshold=np.inf)
+    def __init__(self,
+                 threshold_schedule: Union[None, np.ndarray] = None,
+                 max_iter: int = int(1e4),
+                 **kwargs):
+        self.max_iter = max_iter
+        self.threshold_schedule = threshold_schedule
+        super().__init__(**kwargs)
 
-    mcmc_sampler, mcmc_correction = check_correction(mcmc_sampler, mcmc_correction)
+    def __setattr__(self, key, value):
+        super().__setattr__(key, value)
+        if key == 'threshold_schedule':
+            if value is None:
+                self.next_threshold = self.next_threshold_adaptive
+                self.max_iter = int(1e4)
+            else:
+                self.next_threshold = lambda state, extra: self.threshold_schedule[extra.iter[0]]
+                self.max_iter = len(value)
 
-    if initial_extra is None:
-        initial_extra = cdict(iter=0)
-    initial_extra.random_key = random.split(random_key, n_samps)
+    def startup(self,
+                abc_scenario: ABCScenario,
+                n: int,
+                random_key: np.ndarray = None,
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                **kwargs) -> Tuple[cdict, cdict]:
 
-    init_extra_dict_map_inds = {key: 0 if isinstance(value, np.ndarray) and len(value) == n_samps else None
-                                for key, value in initial_extra.__dict__.items()}
-    init_extra_cdict_map_inds = cdict(**init_extra_dict_map_inds)
+        initial_state, initial_extra = TransportSampler.startup(self, abc_scenario, n, random_key,
+                                                                initial_state, initial_extra, **kwargs)
 
-    initial_state, initial_extra = vmap(
-        lambda state, extra: startup_mcmc(abc_scenario, mcmc_sampler, None, mcmc_correction,
-                                          state, extra), (0, init_extra_cdict_map_inds))(initial_state,
-                                                                                         initial_extra)
-    initial_state.threshold_schedule = np.inf
+        n = len(initial_state.value)
+        if not hasattr(initial_state, 'prior_potential') and is_implemented(abc_scenario.prior_potential):
+            double_random_keys = random.split(initial_extra.random_key[0], 2*n)
+            initial_extra.random_key = double_random_keys[:n]
+            initial_state.prior_potential = vmap(abc_scenario.prior_potential)(initial_state.value,
+                                                                               double_random_keys[n:])
 
-    if None in initial_extra.parameters.__dict__.values():
-        raise ValueError(f'None found in {mcmc_sampler.name} parameters (within ABC-SMC sampler): '
-                         + str(mcmc_sampler.parameters))
+        if not hasattr(initial_state, 'log_weight'):
+            initial_state.log_weight = np.zeros(n)
 
-    if post_mcmc_update is None:
-        if isinstance(mcmc_correction, Metropolis):
-            post_mcmc_update = default_post_metropolis_abc_mcmc_update
-        else:
-            post_mcmc_update = default_post_mcmc_update
+        if not hasattr(initial_state, 'simulated_data'):
+            double_random_keys = random.split(initial_extra.random_key[0], 2*n)
+            initial_extra.random_key = double_random_keys[:n]
+            initial_extra.simulated_data = vmap(abc_scenario.likelihood_sample)(initial_state.value,
+                                                                                double_random_keys[n:])
 
-    start = time()
+        if not hasattr(initial_state, 'distance'):
+            initial_state.distance = vmap(abc_scenario.distance_function)(initial_extra.simulated_data)
 
-    if preschedule is not None:
-        out_samps = _run_prescheduled_abc_smc_sampler(abc_scenario, mcmc_sampler, mcmc_correction, mcmc_steps,
-                                                      preschedule, initial_state, initial_extra, post_mcmc_update)
-    else:
-        if continuation_func is None:
-            continuation_func = lambda state, extra: state.alpha.mean() > 0.01
+        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(np.arange(n))
 
-        out_samps = _run_adaptive_abc_smc_sampler(abc_scenario, mcmc_sampler, mcmc_correction, mcmc_steps,
-                                                  initial_state, initial_extra,
-                                                  post_mcmc_update, max_iter,
-                                                  threshold_quantile_retain, continuation_func)
+        if not hasattr(initial_state, 'threshold'):
+            if self.threshold_schedule is None:
+                initial_state.threshold = np.zeros(n) + np.inf
+            else:
+                initial_state.threshold = np.zeros(n) + self.threshold_schedule[0]
 
-    out_samps.value.block_until_ready()
-    end = time()
-    out_samps.time = end - start
+        return initial_state, initial_extra
 
-    if name is None:
-        name = abc_scenario.name + ": ABC-SMC - " + mcmc_sampler.name
-    out_samps.name = name
-    return out_samps
+    def next_threshold_adaptive(self,
+                                state: cdict,
+                                extra: cdict) -> float:
+        raise AttributeError(f'{self.name} next_threshold_adaptive not initiated')
 
+    def forward_proposal(self,
+                         abc_scenario: ABCScenario,
+                         previous_state: cdict,
+                         previous_extra: cdict) -> Tuple[cdict, cdict]:
+        raise AttributeError(f'{self.name} forward_proposal not initiated')
 
-def _run_prescheduled_abc_smc_sampler(abc_scenario: ABCScenario,
-                                      mcmc_sampler: ABCSampler,
-                                      mcmc_correction: Correction,
-                                      mcmc_steps: int,
-                                      preschedule: np.ndarray,
-                                      initial_state: cdict,
-                                      initial_extra: cdict,
-                                      post_mcmc_update: Callable) -> cdict:
-    initial_state.threshold_schedule = preschedule[0]
-
-    abc_smc_sampler_advance = init_abc_smc_sampler_advance(abc_scenario,
-                                                           mcmc_sampler,
-                                                           mcmc_correction,
-                                                           mcmc_steps,
-                                                           post_mcmc_update)
-
-    def prescheduled_smc_kernel(previous_carry: Tuple[cdict, cdict],
-                                iter_ind: int) -> Tuple[Tuple[cdict, cdict], cdict]:
-        previous_state, previous_extra = previous_carry
-
-        new_state, new_extra = abc_smc_sampler_advance(abc_scenario,
-                                                       previous_state,
-                                                       previous_extra,
-                                                       preschedule[iter_ind])
-        return (new_state, new_extra), new_state
-
-    final_carry, chain = scan(prescheduled_smc_kernel,
-                              (initial_state, initial_extra),
-                              np.arange(1, len(preschedule)))
-    return chain
+    def clean_chain(self,
+                    abc_scenario: ABCScenario,
+                    chain_ensemble_state: cdict) -> cdict:
+        chain_ensemble_state.threshold = chain_ensemble_state.threshold[:, 0]
+        return chain_ensemble_state
 
 
-def _run_adaptive_abc_smc_sampler(abc_scenario: ABCScenario,
-                                  mcmc_sampler: ABCSampler,
-                                  mcmc_correction: Correction,
-                                  mcmc_steps: int,
-                                  initial_state: cdict,
-                                  initial_extra: cdict,
-                                  post_mcmc_update: Callable,
-                                  max_iter: int,
-                                  threshold_quantile_retain: float,
-                                  continuation_func: Callable) -> cdict:
-    initial_state.threshold_schedule = initial_extra.parameters.threshold[0]
-
-    abc_smc_sampler_advance = init_abc_smc_sampler_advance(abc_scenario,
-                                                           mcmc_sampler,
-                                                           mcmc_correction,
-                                                           mcmc_steps,
-                                                           post_mcmc_update)
-
-    def adaptive_abc_smc_kernel(previous_state: cdict,
-                                previous_extra: cdict) \
-            -> Tuple[cdict, cdict]:
-        # Determine next threshold
-        new_threshold = np.quantile(previous_state.distance, threshold_quantile_retain)
-
-        new_state, new_extra = abc_smc_sampler_advance(previous_state,
-                                                       previous_extra,
-                                                       new_threshold)
-
-        return new_state, new_extra
-
-    chain = while_loop_stacked(continuation_func,
-                               adaptive_abc_smc_kernel,
-                               (initial_state.copy(), initial_extra.copy()),
-                               max_iter)
-    return chain
+def adapt_stepsize_scaled_diag_cov(ensemble_state: cdict,
+                                   ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+    n, d = ensemble_state.value.shape
+    stepsize = vmap(np.cov, (1,))(ensemble_state.value) / d * 2.38 ** 2
+    ensemble_extra.parameters.stepsize = np.repeat(stepsize[np.newaxis], n, axis=0)
+    return ensemble_state, ensemble_extra
 
 
-def init_abc_smc_sampler_advance(abc_scenario: ABCScenario,
-                                 mcmc_sampler: ABCSampler,
-                                 mcmc_correction: Correction,
-                                 mcmc_steps: int,
-                                 post_mcmc_update: Callable) -> Callable:
-    # Move
-    def mcmc_kernel(previous_carry: Tuple[cdict, cdict],
-                    iter_ind: int) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict]]:
-        previous_state, previous_extra = previous_carry
-        reject_state = previous_state.copy()
-        reject_extra = previous_extra.copy()
-        reject_extra.iter = iter_ind
+class MetropolisedABCSMCSampler(ABCSMCSampler):
 
-        reject_state, reject_extra = mcmc_sampler.always(abc_scenario,
-                                                         reject_state,
-                                                         reject_extra)
+    def __init__(self,
+                 mcmc_sampler: Union[ABCMCMCSampler, Type[ABCMCMCSampler]] = None,
+                 mcmc_correction: Union[Correction, Type[Correction], str] = 'sampler_default',
+                 mcmc_steps: int = 20,
+                 threshold_schedule: Union[None, np.ndarray] = None,
+                 max_iter: int = int(1e4),
+                 threshold_quantile_retain: float = 0.75,
+                 **kwargs):
+        super().__init__(max_iter=max_iter, threshold_schedule=threshold_schedule, **kwargs)
+        if mcmc_sampler is None:
+            mcmc_sampler = RandomWalkABC()
+            self.adapt = adapt_stepsize_scaled_diag_cov
 
-        proposed_state, proposed_extra = mcmc_sampler.proposal(abc_scenario,
-                                                               reject_state,
-                                                               reject_extra)
+        if isclass(mcmc_sampler):
+            mcmc_sampler = mcmc_sampler()
+        self.mcmc_sampler = mcmc_sampler
+        if mcmc_correction != 'sampler_default':
+            self.mcmc_sampler.correction = mcmc_correction
+        self.parameters.mcmc_steps = mcmc_steps
+        self.parameters.threshold_quantile_retain = threshold_quantile_retain
 
-        corrected_state, corrected_extra = mcmc_correction(abc_scenario, mcmc_sampler,
-                                                           reject_state, reject_extra,
-                                                           proposed_state, proposed_extra)
+    def startup(self,
+                abc_scenario: ABCScenario,
+                n: int,
+                random_key: np.ndarray = None,
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                **kwargs) -> Tuple[cdict, cdict]:
 
-        return (corrected_state, corrected_extra), (corrected_state, corrected_extra)
+        self.mcmc_sampler.correction = check_correction(self.mcmc_sampler.correction)
 
-    def mcmc_chain(start_state: cdict,
-                   start_extra: cdict):
+        initial_state, initial_extra = super().startup(abc_scenario, n, random_key, initial_state, initial_extra,
+                                                       **kwargs)
+
+        initial_state, initial_extra = vmap(
+            lambda state, extra: self.mcmc_sampler.startup(abc_scenario,
+                                                           n,
+                                                           None,
+                                                           state,
+                                                           extra))(initial_state, initial_extra)
+
+        initial_threshold = self.next_threshold(initial_state, initial_extra)
+        initial_state.threshold = np.zeros(n) + initial_threshold
+        initial_extra.parameters.threshold = initial_state.threshold
+        if not hasattr(initial_state, 'log_weight'):
+            initial_state.log_weight = np.zeros(n)
+        initial_state.log_weight = np.where(initial_state.distance < initial_threshold,
+                                            initial_state.log_weight, -np.inf)
+        initial_state, initial_extra = self.adapt(initial_state, initial_extra)
+        return initial_state, initial_extra
+
+    def termination_criterion(self,
+                              ensemble_state: cdict,
+                              ensemble_extra: cdict) -> bool:
+        return np.logical_or(ensemble_state.alpha.mean() <= 0.01,
+                             ensemble_extra.iter[0] >= self.max_iter)
+
+    def next_threshold_adaptive(self,
+                                state: cdict,
+                                extra: cdict) -> float:
+        return np.quantile(state.distance, extra.parameters.threshold_quantile_retain[0])
+
+    def log_weight(self,
+                   previous_ensemble_state: cdict,
+                   previous_ensemble_extra: cdict,
+                   new_ensemble_state: cdict,
+                   new_ensemble_extra: cdict) -> np.ndarray:
+        return np.where(new_ensemble_state.distance < new_ensemble_extra.parameters.threshold, 0., -np.inf)
+
+    def clean_mcmc_chain(self,
+                         chain_state: cdict,
+                         chain_extra: cdict) -> Tuple[cdict, cdict]:
+        clean_state = chain_state[-1]
+        clean_extra = chain_extra[-1]
+        clean_state.alpha = chain_state.alpha.mean()
+        clean_extra.parameters = chain_extra.parameters[-1]
+        return clean_state, clean_extra
+
+    def forward_proposal(self,
+                         abc_scenario: ABCScenario,
+                         state: cdict,
+                         extra: cdict) -> Tuple[cdict, cdict]:
+
+        def mcmc_kernel(previous_carry: Tuple[cdict, cdict],
+                        _: None) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict]]:
+            new_carry = self.mcmc_sampler.update(abc_scenario, *previous_carry)
+            return new_carry, new_carry
+
+        start_state, start_extra = self.mcmc_sampler.startup(abc_scenario,
+                                                             extra.parameters.mcmc_steps,
+                                                             None,
+                                                             state,
+                                                             extra)
+
         final_carry, chain = scan(mcmc_kernel,
                                   (start_state, start_extra),
-                                  np.arange(1, mcmc_steps + 1))
-        return chain
+                                  None,
+                                  length=self.parameters.mcmc_steps)
 
-    mcmc_chains_vec = vmap(mcmc_chain)
+        advanced_state, advanced_extra = self.clean_mcmc_chain(chain[0], chain[1])
+        advanced_extra.iter = extra.iter
 
-    def smc_sampler_advance(previous_full_state: cdict,
-                            previous_full_extra: cdict,
-                            new_threshold: float) -> Tuple[cdict, cdict]:
-        if hasattr(previous_full_state, 'threshold_schedule'):
-            del previous_full_state.threshold_schedule
-        new_full_state = previous_full_state.copy()
-        new_full_extra = previous_full_extra.copy()
+        return advanced_state, advanced_extra
 
-        n = previous_full_state.value.shape[0]
+    def update(self,
+               abc_scenario: ABCScenario,
+               ensemble_state: cdict,
+               ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+        n = ensemble_state.value.shape[0]
+        ensemble_extra.iter = ensemble_extra.iter + 1
 
-        new_full_extra.parameters.threshold = new_threshold * np.ones(n)
+        resample_bool = self.resample_criterion(ensemble_state, ensemble_extra)
+        ensemble_state.log_weight = np.where(resample_bool, 0., ensemble_state.log_weight)
 
-        # Resample
-        int_random_key, _ = random.split(new_full_extra.random_key[0])
-        sample_inds = random.choice(int_random_key, a=n,
-                                    p=previous_full_state.distance < new_threshold, shape=(n,))
-        new_full_state = new_full_state[sample_inds]
-        new_full_extra = new_full_extra[sample_inds]
-        new_full_extra.random_key = previous_full_extra.random_key
+        resampled_ensemble_state, resampled_ensemble_extra \
+            = cond(resample_bool,
+                   lambda tup: self.resample(*tup),
+                   lambda tup: tup,
+                   (ensemble_state, ensemble_extra))
 
-        new_full_enlarged_state, new_full_enlarged_extra = mcmc_chains_vec(new_full_state, new_full_extra)
+        advanced_state, advanced_extra = vmap(self.forward_proposal, in_axes=(None, 0, 0))(abc_scenario,
+                                                                                           resampled_ensemble_state,
+                                                                                           resampled_ensemble_extra)
 
-        new_full_state, new_full_extra = post_mcmc_update(previous_full_state, previous_full_extra,
-                                                          new_full_enlarged_state, new_full_enlarged_extra)
+        advanced_extra.iter = ensemble_extra.iter
+        next_threshold = self.next_threshold(advanced_state, advanced_extra)
+        advanced_state.threshold = np.ones(n) * next_threshold
+        advanced_extra.parameters.threshold = advanced_state.threshold
+        advanced_state.log_weight = self.log_weight(ensemble_state, ensemble_extra, advanced_state, advanced_extra)
 
-        new_full_state.threshold_schedule = new_threshold
-        return new_full_state, new_full_extra
+        advanced_state, advanced_extra = self.adapt(advanced_state, advanced_extra)
 
-    return smc_sampler_advance
+        return advanced_state, advanced_extra
+

@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: ssm/tests/test_linear_gaussian.py
+# Module: ssm/tests/test_ssm_linear_gaussian.py
 # Description: Tests for 1D non-linear benchmark model.
 #
 # Web: https://github.com/SamDuffield/mocat

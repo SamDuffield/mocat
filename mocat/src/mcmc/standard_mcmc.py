@@ -6,28 +6,40 @@
 ########################################################################################################################
 
 from typing import Tuple, Union
-from functools import partial
 
 import jax.numpy as np
 from jax import random
 
 from mocat.src.core import cdict, Scenario
-from mocat.src.mcmc.sampler import MCMCSampler, mh_acceptance_probability
+from mocat.src.mcmc.sampler import MCMCSampler
 from mocat.src import utils
-from mocat.src.mcmc.corrections import Metropolis
+from mocat.src.mcmc.metropolis import Metropolis, mh_acceptance_probability
 
 
 # Random-walk
 # Identity pre-conditioner
 class RandomWalk(MCMCSampler):
     name = 'Random Walk'
-    default_correction = Metropolis
+    correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None):
         super().__init__()
         self.parameters.stepsize = stepsize
         self.tuning.target = 0.234
+
+    def startup(self,
+                scenario: Scenario,
+                n: int,
+                random_key: np.ndarray = None,
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
+        initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
+        initial_state.potential = scenario.potential(initial_state.value, scen_key)
+        return initial_state, initial_extra
 
     def proposal(self,
                  scenario: Scenario,
@@ -40,9 +52,10 @@ class RandomWalk(MCMCSampler):
 
         stepsize = reject_extra.parameters.stepsize
 
-        reject_extra.random_key, subkey = random.split(reject_extra.random_key)
+        reject_extra.random_key, subkey, scen_key = random.split(reject_extra.random_key, 3)
 
         proposed_state.value = x + np.sqrt(stepsize) * random.normal(subkey, (d,))
+        proposed_state.potential = scenario.potential(proposed_state.value, scen_key)
 
         return proposed_state, reject_extra
 
@@ -58,7 +71,7 @@ class RandomWalk(MCMCSampler):
 # Identity pre-conditioner
 class Overdamped(MCMCSampler):
     name = 'Overdamped'
-    default_correction = Metropolis
+    correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None):
@@ -68,11 +81,16 @@ class Overdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
+                n: int,
+                random_key: np.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
-                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
-        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
+        initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
+        initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
+                                                                                            scen_key)
         return initial_state, initial_extra
 
     def proposal(self,
@@ -87,12 +105,13 @@ class Overdamped(MCMCSampler):
 
         stepsize = reject_extra.parameters.stepsize
 
-        reject_extra.random_key, subkey = random.split(reject_extra.random_key)
+        reject_extra.random_key, subkey, scen_key = random.split(reject_extra.random_key, 3)
 
         proposed_state.value = x \
                                - stepsize * x_grad_potential \
                                + np.sqrt(2 * stepsize) * random.normal(subkey, (d,))
-        proposed_state.grad_potential = scenario.grad_potential(proposed_state.value)
+        proposed_state.potential, proposed_state.grad_potential = scenario.potential_and_grad(proposed_state.value,
+                                                                                              scen_key)
 
         return proposed_state, reject_extra
 
@@ -100,12 +119,11 @@ class Overdamped(MCMCSampler):
                            scenario: Scenario,
                            reject_state: cdict, reject_extra: cdict,
                            proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
-        d = scenario.dim
         stepsize = reject_extra.parameters.stepsize
 
         return utils.gaussian_potential(proposed_state.value,
                                         reject_state.value - stepsize * reject_state.grad_potential,
-                                        np.eye(d) / (2 * stepsize))
+                                        1. / (2 * stepsize))
 
     acceptance_probability = mh_acceptance_probability
 
@@ -114,7 +132,7 @@ class Overdamped(MCMCSampler):
 # Identity pre-conditioner/mass matrix
 class HMC(MCMCSampler):
     name = 'HMC'
-    default_correction = Metropolis
+    correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,
@@ -126,11 +144,16 @@ class HMC(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
+                n: int,
+                random_key: np.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
-                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
-        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
+        initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
+        initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
+                                                                                            scen_key)
         if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
             initial_state.momenta = np.zeros(scenario.dim)
         return initial_state, initial_extra
@@ -140,19 +163,19 @@ class HMC(MCMCSampler):
                  reject_state: cdict,
                  reject_extra: cdict) -> Tuple[cdict, cdict]:
         d = scenario.dim
+        random_keys = random.split(reject_extra.random_key, self.parameters.leapfrog_steps + 2)
 
-        stepsize = reject_extra.parameters.stepsize
+        reject_extra.random_key = random_keys[0]
 
-        reject_extra.random_key, subkey = random.split(reject_extra.random_key)
+        reject_state.momenta = random.normal(random_keys[1], (d,))
 
-        reject_state.momenta = random.normal(subkey, (d,))
+        all_leapfrog_state = utils.leapfrog(scenario.potential_and_grad,
+                                            reject_state,
+                                            reject_extra.parameters.stepsize,
+                                            random_keys[2:])
+        proposed_state = all_leapfrog_state[-1]
 
-        proposed_state = utils.leapfrog(reject_state,
-                                        scenario.grad_potential,
-                                        stepsize,
-                                        self.parameters.leapfrog_steps)[-1]
-
-        # Techinically we should reverse momenta now
+        # Technically we should reverse momenta now
         # but momenta target is symmetric and then immediately resampled at the next step anyway
 
         return proposed_state, reject_extra
@@ -173,7 +196,7 @@ class HMC(MCMCSampler):
 # Identity pre-conditioner/mass matrix
 class Underdamped(MCMCSampler):
     name = 'Underdamped'
-    default_correction = Metropolis
+    correction = Metropolis
 
     def __init__(self,
                  stepsize: float = None,
@@ -187,11 +210,16 @@ class Underdamped(MCMCSampler):
 
     def startup(self,
                 scenario: Scenario,
+                n: int,
+                random_key: np.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
-                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
-        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
+        initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
+        initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
+                                                                                            scen_key)
         if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
             initial_state.momenta = np.zeros(scenario.dim)
         return initial_state, initial_extra
@@ -218,82 +246,18 @@ class Underdamped(MCMCSampler):
                  scenario: Scenario,
                  reject_state: cdict,
                  reject_extra: cdict) -> Tuple[cdict, cdict]:
-        stepsize = reject_extra.parameters.stepsize
+        random_keys = random.split(reject_extra.random_key, self.parameters.leapfrog_steps + 2)
 
-        proposed_state = utils.leapfrog(reject_state,
-                                        scenario.grad_potential,
-                                        stepsize,
-                                        self.parameters.leapfrog_steps)[-1]
-        proposed_state.momenta = proposed_state.momenta * -1
+        reject_extra.random_key = random_keys[0]
+
+        all_leapfrog_state = utils.leapfrog(scenario.potential_and_grad,
+                                            reject_state,
+                                            reject_extra.parameters.stepsize,
+                                            random_keys[2:])
+        proposed_state = all_leapfrog_state[-1]
+
+        proposed_state.momenta *= -1
 
         return proposed_state, reject_extra
 
     acceptance_probability = HMC.acceptance_probability
-
-
-# Tamed Euler-Maruyama discretisation of Overdamped Langevin dynamics
-# Identity pre-conditioner
-class TamedOverdamped(MCMCSampler):
-    name = 'Tamed Overdamped'
-    default_correction = Metropolis
-
-    def __init__(self,
-                 stepsize: float = None):
-        super().__init__()
-        self.parameters.stepsize = stepsize
-        self.tuning.target = 0.574
-        self.taming = self.taming_coord
-
-    def startup(self,
-                scenario: Scenario,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
-                random_key: np.ndarray = None) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, initial_state, initial_extra, random_key)
-        initial_state.grad_potential = scenario.grad_potential(initial_state.value)
-        return initial_state, initial_extra
-
-    def proposal(self,
-                 scenario: Scenario,
-                 reject_state: cdict,
-                 reject_extra: cdict) -> Tuple[cdict, cdict]:
-        proposed_state = reject_state.copy()
-
-        d = scenario.dim
-        x = reject_state.value
-        x_grad_potential = reject_state.grad_potential
-
-        stepsize = reject_extra.parameters.stepsize
-
-        reject_extra.random_key, subkey = random.split(reject_extra.random_key)
-
-        proposed_state.value = x \
-                               - stepsize * x_grad_potential * self.taming(reject_state, reject_extra) \
-                               + np.sqrt(2 * stepsize) * random.normal(subkey, (d,))
-        proposed_state.grad_potential = scenario.grad_potential(proposed_state.value)
-
-        return proposed_state, reject_extra
-
-    @staticmethod
-    def taming_global(state: cdict,
-                      extra: cdict) -> Union[float, np.ndarray]:
-        return 1. / (1 + extra.parameters.stepsize * np.linalg.norm(state.grad_potential))
-
-    @staticmethod
-    def taming_coord(state: cdict,
-                     extra: cdict) -> Union[float, np.ndarray]:
-        return 1. / (1 + extra.parameters.stepsize * np.abs(state.grad_potential))
-
-    def proposal_potential(self,
-                           scenario: Scenario,
-                           reject_state: cdict, reject_extra: cdict,
-                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
-        d = scenario.dim
-        stepsize = reject_extra.parameters.stepsize
-
-        return utils.gaussian_potential(proposed_state.value,
-                                        reject_state.value - stepsize * reject_state.grad_potential
-                                        * self.taming(reject_state, reject_extra),
-                                        np.eye(d) / (2 * stepsize))
-
-    acceptance_probability = mh_acceptance_probability

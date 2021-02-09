@@ -62,7 +62,7 @@ plt.tight_layout()
 ```
 ![comp-metrics](examples/images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
 
-Plus functionality for effective sample size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
+Plus functionality for effective run size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
 
 
 ## Create your own MCMC sampler

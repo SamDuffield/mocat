@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: tests/test_mcmc_metrics.py
-# Description: Tests for metrics analysing sample quality.
+# Description: Tests for metrics analysing run quality.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################

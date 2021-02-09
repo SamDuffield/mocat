@@ -134,26 +134,6 @@ class StateSpaceModel:
         else:
             return self._grad_smoothing_potential(x_all, y_all, t_all)
 
-    def lag_smoothing_potential(self,
-                                x_all: np.ndarray,
-                                y_all: np.ndarray,
-                                t_all: np.ndarray) -> Union[float, np.ndarray]:
-        return vmap(self.transition_potential)(x_all[:-1], t_all[:-1],
-                                               x_all[1:], t_all[1:]).sum() \
-               + vmap(self.likelihood_potential)(x_all[1:], y_all, t_all[1:]).sum()
-
-    @partial(jit, static_argnums=(0,))
-    def grad_lag_smoothing_potential(self,
-                                     x_all: np.ndarray,
-                                     y_all: np.ndarray,
-                                     t_all: np.ndarray) -> Union[float, np.ndarray]:
-        transition_prev_grads, transition_next_grads = vmap(self.grad_transition_potential)(x_all[:-1], t_all[:-1],
-                                                                                            x_all[1:], t_all[1:])
-        likelihood_grads = vmap(self.grad_likelihood_potential)(x_all[1:], y_all, t_all[1:])
-
-        return np.vstack([transition_prev_grads[1:] + transition_next_grads[:-1] + likelihood_grads[:-1],
-                          transition_next_grads[-1] + likelihood_grads[-1]])
-
     def simulate(self,
                  t_all: np.ndarray,
                  random_key: np.ndarray) -> cdict:
@@ -178,5 +158,5 @@ class StateSpaceModel:
 
         y = vmap(self.likelihood_sample)(x_all, t_all, obs_keys)
 
-        out_cdict = cdict(x=x_all, y=y, t=t_all, name=f'{self.name} sample')
+        out_cdict = cdict(x=x_all, y=y, t=t_all, name=f'{self.name} run')
         return out_cdict
