@@ -9,11 +9,8 @@ from typing import Any, Union, Callable, Tuple
 from functools import partial
 from warnings import warn
 
-from decorator import decorator
 from jax.lax import scan, while_loop, cond
-from jax import jit, numpy as np, vmap, random
-import matplotlib.pyplot as plt
-from matplotlib.figure import Figure
+from jax import jit, numpy as np, vmap
 
 from mocat.src.core import cdict
 
@@ -81,7 +78,7 @@ def gaussian_potential(x: np.ndarray,
         neg_log_z = (d * np.log(2 * np.pi) - np.log(det_prec)) / 2
 
     if x.ndim == 1 and sqrt_prec is None:
-        # Single x value (not vectorised)
+        # Single vals value (not vectorised)
         if prec is None:
             out_val = _mv_gaussian_potential_diag(x, mean, 1.)
         elif prec.ndim < 2:
@@ -89,7 +86,7 @@ def gaussian_potential(x: np.ndarray,
         else:
             out_val = _mv_gaussian_potential(x, mean, prec)
     else:
-        # Multiple x values (vectorised)
+        # Multiple vals values (vectorised)
         if prec is not None and sqrt_prec is None:
             if prec.ndim < 2:
                 sqrt_prec = np.sqrt(prec)
@@ -136,36 +133,6 @@ def leapfrog(potential_and_grad: Callable,
     all_leapfrog = state[np.newaxis] + all_leapfrog
 
     return all_leapfrog
-
-
-@decorator
-def _metric_plot_decorate(plot_func: Callable,
-                          *args, **kwargs) -> Union[plt.Axes, Tuple[Figure, plt.Axes]]:
-    sample = args[0]
-    ax = args[-1]
-
-    if 'title' not in kwargs.keys() and hasattr(sample, 'name'):
-        title = sample.name
-    elif 'title' in kwargs.keys():
-        title = kwargs['title']
-        del kwargs['title']
-    else:
-        title = None
-
-    if ax is None:
-        fig, ax = plt.subplots()
-        plot_func(*args[:-1], ax, **kwargs)
-
-        if title is not None:
-            ax.set_title(title)
-
-        return fig, ax
-    else:
-        plot_func(*args, **kwargs)
-        ax = args[-1]
-        if title is not None:
-            ax.set_title(title)
-        return ax
 
 
 @partial(jit, static_argnums=(0, 1, 3))

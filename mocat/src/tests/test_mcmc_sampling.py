@@ -13,7 +13,7 @@ import numpy.testing as npt
 
 from mocat.src.core import cdict
 from mocat.src.scenarios.twodim import toy_examples
-from mocat.src.mcmc.metrics import ess, acceptance_rate
+from mocat.src.metrics import ess, acceptance_rate
 from mocat.src.mcmc import standard_mcmc
 from mocat.src.mcmc.metropolis import Metropolis, RMMetropolis
 from mocat.src.sample import run

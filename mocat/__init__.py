@@ -39,17 +39,18 @@ from mocat.src.transport.smc import MetropolisedSMCSampler
 
 from mocat.src.transport.svgd import SVGD
 
-from mocat.src.mcmc.metrics import acceptance_rate
-from mocat.src.mcmc.metrics import autocorrelation
-from mocat.src.mcmc.metrics import integrated_autocorrelation_time
-from mocat.src.mcmc.metrics import ess
-from mocat.src.mcmc.metrics import ess_per_second
-from mocat.src.mcmc.metrics import squared_jumping_distance
-from mocat.src.mcmc.metrics import ksd
-from mocat.src.mcmc.metrics import autocorrelation_plot
-from mocat.src.mcmc.metrics import trace_plot
-from mocat.src.mcmc.metrics import plot_2d_samples
-from mocat.src.mcmc.metrics import hist_1d_samples
+from mocat.src.metrics import autocorrelation
+from mocat.src.metrics import integrated_autocorrelation_time
+from mocat.src.metrics import ess_autocorrelation
+from mocat.src.metrics import log_ess_log_weights
+from mocat.src.metrics import ess_log_weights
+from mocat.src.metrics import squared_jumping_distance
+from mocat.src.metrics import ksd
+from mocat.src.metrics import metric_plot
+from mocat.src.metrics import autocorrelation_plot
+from mocat.src.metrics import trace_plot
+from mocat.src.metrics import plot_2d_samples
+from mocat.src.metrics import hist_1d_samples
 
 
 try:
