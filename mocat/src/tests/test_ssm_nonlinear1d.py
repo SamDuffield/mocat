@@ -8,32 +8,22 @@
 
 import unittest
 
-import jax.numpy as np
-from jax import random
-import numpy.testing as npt
-from mocat.src.ssm.filters import BootstrapFilter, run_particle_filter_for_marginals
+from mocat.src.tests.test_ssm import TestSSM
 from mocat.src.ssm.scenarios.nonlinear1d import NonLinear1DBenchmark
 
 
-class Test1DBootstrap(unittest.TestCase):
+class Test1DBootstrap(TestSSM):
 
-    nlssm = NonLinear1DBenchmark()
-    t = np.arange(20)
-    sims = nlssm.simulate(t, random.PRNGKey(0))
+    ssm_scenario = NonLinear1DBenchmark()
 
-    bootstrap_filter = BootstrapFilter()
-    n = 1000
+    def test_simulate(self):
+        super()._test_simulate()
 
-    def test_run_for_margs(self):
-        pf_samps = run_particle_filter_for_marginals(self.nlssm,
-                                                     self.bootstrap_filter,
-                                                     self.sims.y,
-                                                     self.t,
-                                                     random.PRNGKey(0),
-                                                     n=self.n)
+    def test_bootstrap(self):
+        super()._test_bootstrap()
 
-        npt.assert_array_less(self.sims.x, np.max(pf_samps.value, axis=1))
-        npt.assert_array_less(np.min(pf_samps.value, axis=1), self.sims.x)
+    def test_backward(self):
+        super()._test_backward()
 
 
 if __name__ == '__main__':

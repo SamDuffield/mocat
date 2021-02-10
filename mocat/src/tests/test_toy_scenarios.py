@@ -16,7 +16,7 @@ from mocat.src.scenarios import toy_examples
 
 class Test1DGaussian(unittest.TestCase):
 
-    scenario = toy_examples.Gaussian(1)
+    scenario = toy_examples.Gaussian(1, prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
@@ -39,7 +39,7 @@ class Test1DGaussian(unittest.TestCase):
 
 class TestNDGaussian(unittest.TestCase):
 
-    scenario = toy_examples.Gaussian(10)
+    scenario = toy_examples.Gaussian(10, prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 10)
@@ -58,7 +58,7 @@ class TestNDGaussian(unittest.TestCase):
 
 class Test1DGaussianMixture(unittest.TestCase):
 
-    scenario = toy_examples.GaussianMixture(means=np.array([0, 1]))
+    scenario = toy_examples.GaussianMixture(means=np.array([0, 1]), prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
@@ -85,7 +85,7 @@ class Test1DGaussianMixture(unittest.TestCase):
 
 class TestNDGaussianMixture(unittest.TestCase):
 
-    scenario = toy_examples.GaussianMixture(means=np.arange(15).reshape(5, 3))
+    scenario = toy_examples.GaussianMixture(means=np.arange(15).reshape(5, 3), prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 3)
@@ -108,7 +108,7 @@ class TestNDGaussianMixture(unittest.TestCase):
 
 class Test1DDoubleWell(unittest.TestCase):
 
-    scenario = toy_examples.DoubleWell(1)
+    scenario = toy_examples.DoubleWell(1, prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
@@ -128,7 +128,7 @@ class Test1DDoubleWell(unittest.TestCase):
 
 class TestNDDoubleWell(unittest.TestCase):
 
-    scenario = toy_examples.DoubleWell(6)
+    scenario = toy_examples.DoubleWell(6, prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 6)

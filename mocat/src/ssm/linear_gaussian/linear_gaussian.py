@@ -31,12 +31,17 @@ class LinearGaussian(StateSpaceModel):
                                    t: Union[float, None]) -> np.ndarray:
         raise NotImplementedError
 
+    def get_initial_precision_det(self,
+                                  t: Union[float, None]) -> float:
+        raise NotImplementedError
+
     def initial_potential(self,
                           x: np.ndarray,
                           t: Union[float, None]) -> Union[float, np.ndarray]:
         init_mean = self.get_initial_mean(t)
         init_prec_sqrt = self.get_initial_precision_sqrt(t)
-        return gaussian_potential(x, init_mean, sqrt_prec=init_prec_sqrt)
+        init_prec_det = self.get_initial_precision_det(t)
+        return gaussian_potential(x, init_mean, sqrt_prec=init_prec_sqrt, det_prec=init_prec_det)
 
     def initial_sample(self,
                        t: Union[float, None],
@@ -60,6 +65,11 @@ class LinearGaussian(StateSpaceModel):
                                       t_new: float) -> np.ndarray:
         raise NotImplementedError
 
+    def get_transition_precision_det(self,
+                                     t_previous: float,
+                                     t_new: float) -> float:
+        raise NotImplementedError
+
     def transition_potential(self,
                              x_previous: np.ndarray,
                              t_previous: float,
@@ -67,9 +77,11 @@ class LinearGaussian(StateSpaceModel):
                              t_new: float) -> Union[float, np.ndarray]:
         transition_mat = self.get_transition_matrix(t_previous, t_new)
         transition_prec_sqrt = self.get_transition_precision_sqrt(t_previous, t_new)
+        transition_prec_det = self.get_transition_precision_det(t_previous, t_new)
         return gaussian_potential(x_new,
                                   x_previous @ transition_mat.T,
-                                  sqrt_prec=transition_prec_sqrt)
+                                  sqrt_prec=transition_prec_sqrt,
+                                  det_prec=transition_prec_det)
 
     def transition_sample(self,
                           x_previous: np.ndarray,
@@ -93,6 +105,10 @@ class LinearGaussian(StateSpaceModel):
                                       t: float) -> np.ndarray:
         raise NotImplementedError
 
+    def get_likelihood_precision_det(self,
+                                     t: float) -> float:
+        raise NotImplementedError
+
     def transition_function(self,
                             x_previous: np.ndarray,
                             t_previous: float,
@@ -105,9 +121,11 @@ class LinearGaussian(StateSpaceModel):
                              t: float) -> Union[float, np.ndarray]:
         likelihood_mat = self.get_likelihood_matrix(t)
         likelihood_prec_sqrt = self.get_likelihood_precision_sqrt(t)
+        likelihood_prec_det = self.get_likelihood_precision_det(t)
         return gaussian_potential(y,
                                   x @ likelihood_mat.T,
-                                  sqrt_prec=likelihood_prec_sqrt)
+                                  sqrt_prec=likelihood_prec_sqrt,
+                                  det_prec=likelihood_prec_det)
 
     def likelihood_sample(self,
                           x: np.ndarray,
@@ -130,12 +148,15 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
     # where F, Q, H, R are all time-homogenous
     # typically this means t is of the form np.arange(start, end, step)
 
-    initial_covariance_sqrt = None
-    initial_precision_sqrt = None
-    transition_covariance_sqrt = None
-    transition_precision_sqrt = None
-    likelihood_covariance_sqrt = None
-    likelihood_precision_sqrt = None
+    initial_covariance_sqrt: np.ndarray = None
+    initial_precision_sqrt: np.ndarray = None
+    initial_precision_det: float = None
+    transition_covariance_sqrt: np.ndarray = None
+    transition_precision_sqrt: np.ndarray = None
+    transition_precision_det: float = None
+    likelihood_covariance_sqrt: np.ndarray = None
+    likelihood_precision_sqrt: np.ndarray = None
+    likelihood_precision_det: float = None
 
     def __init__(self,
                  initial_mean: np.ndarray = None,
@@ -200,6 +221,10 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
                                    t: Union[float, None]) -> np.ndarray:
         return self.initial_precision_sqrt
 
+    def get_initial_precision_det(self,
+                                  t: Union[float, None]) -> float:
+        return self.initial_precision_det
+
     def get_transition_matrix(self,
                               t_previous: float,
                               t_new: float) -> np.ndarray:
@@ -215,6 +240,11 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
                                       t_new: float) -> np.ndarray:
         return self.transition_precision_sqrt
 
+    def get_transition_precision_det(self,
+                                     t_previous: float,
+                                     t_new: float) -> float:
+        return self.transition_precision_det
+
     def get_likelihood_matrix(self,
                               t: float) -> np.ndarray:
         return self.likelihood_matrix
@@ -226,3 +256,7 @@ class TimeHomogenousLinearGaussian(LinearGaussian):
     def get_likelihood_precision_sqrt(self,
                                       t: float) -> np.ndarray:
         return self.likelihood_precision_sqrt
+
+    def get_likelihood_precision_det(self,
+                                     t: float) -> float:
+        return self.likelihood_precision_det

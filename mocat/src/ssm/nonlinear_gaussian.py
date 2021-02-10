@@ -12,8 +12,7 @@ from typing import Union, Any, Tuple
 from jax import numpy as np, random, vmap, jit
 
 from mocat.src.ssm.ssm import StateSpaceModel
-from mocat.src.ssm._utils import kalman_gain
-from mocat.src.utils import gaussian_potential, extract_dimension, reset_covariance
+from mocat.src.utils import gaussian_potential, extract_dimension, reset_covariance, kalman_gain
 from mocat.src.ssm.filters import ParticleFilter
 
 
@@ -261,10 +260,10 @@ class OptimalNonLinearGaussianParticleFilter(ParticleFilter):
         x_new = conditioned_mean \
                 + random.normal(random_keys[0], shape=x_previous.shape) @ self.proposal_covariance_sqrt.T
 
-        log_weights_new = -gaussian_potential(y_new,
+        log_weight_new = -gaussian_potential(y_new,
                                               mx @ ssm_scenario.likelihood_matrix.T,
                                               sqrt_prec=self.weight_precision_sqrt)
-        return x_new, log_weights_new
+        return x_new, log_weight_new
 
 
 class EnsembleKalmanFilter(ParticleFilter):

@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: _utils.py
+# Module: utils.py
 # Description: Some useful functions including TemporalGaussian potential evaluations and leapfrog integrator.
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -323,3 +323,14 @@ def gc_matrix(dim: int,
                                                np.abs(np.arange(dim) + dim - i),
                                                np.abs(np.arange(dim) - dim - i)]), axis=0), radius)
                 )(np.arange(dim))
+
+
+@jit
+def kalman_gain(cov_sqrt: np.ndarray,
+                lik_mat: np.ndarray,
+                lik_cov_sqrt: np.ndarray,
+                inv_mat: np.ndarray = None) -> np.ndarray:
+    if inv_mat is None:
+        lik_mat_cov_sqrt = lik_mat @ cov_sqrt
+        inv_mat = np.linalg.inv(lik_mat_cov_sqrt @ lik_mat_cov_sqrt.T + lik_cov_sqrt @ lik_cov_sqrt.T)
+    return cov_sqrt @ cov_sqrt.T @ lik_mat.T @ inv_mat

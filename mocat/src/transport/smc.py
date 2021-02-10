@@ -16,7 +16,7 @@ from mocat.src.core import Scenario, cdict
 from mocat.src.transport.sampler import TransportSampler
 from mocat.src.mcmc.sampler import MCMCSampler, Correction, check_correction
 from mocat.src.utils import bisect
-from mocat.src.metrics import log_ess_log_weights
+from mocat.src.metrics import log_ess_log_weight
 
 
 class SMCSampler(TransportSampler):
@@ -251,8 +251,8 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
     def log_ess(current_temperature: float,
                 new_temperature: float,
                 likelihood_potential: np.ndarray) -> float:
-        log_weights = - (new_temperature - current_temperature) * likelihood_potential
-        return log_ess_log_weights(log_weights)
+        log_weight = - (new_temperature - current_temperature) * likelihood_potential
+        return log_ess_log_weight(log_weight)
 
     def next_temperature_adaptive(self,
                                   ensemble_state: cdict,

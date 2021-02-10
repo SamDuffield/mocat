@@ -246,14 +246,14 @@ class Underdamped(MCMCSampler):
                  scenario: Scenario,
                  reject_state: cdict,
                  reject_extra: cdict) -> Tuple[cdict, cdict]:
-        random_keys = random.split(reject_extra.random_key, self.parameters.leapfrog_steps + 2)
+        random_keys = random.split(reject_extra.random_key, self.parameters.leapfrog_steps + 1)
 
         reject_extra.random_key = random_keys[0]
 
         all_leapfrog_state = utils.leapfrog(scenario.potential_and_grad,
                                             reject_state,
                                             reject_extra.parameters.stepsize,
-                                            random_keys[2:])
+                                            random_keys[1:])
         proposed_state = all_leapfrog_state[-1]
 
         proposed_state.momenta *= -1

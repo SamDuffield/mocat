@@ -1,6 +1,12 @@
 # mocat
-Create, tune and compare Monte Carlo algorithms in JAX.
-Features include fully customisable MCMC, SVGD, SMC samplers, ABC as well as state-space models (particle filtering and smoothing).
+All things Monte Carlo, written in JAX.
+- Markov chain Monte Carlo
+- Transport samplers
+    * Sequential Monte Carlo samplers (likelihood tempering)
+    * Stein variational gradient descent
+    
+- Approximate Bayesian computation (MCMC and SMC variants)
+- State-space models (particle filtering and smoothing)
 
 ## Install
 ```
@@ -25,13 +31,15 @@ class Rastrigin(mocat.Scenario):
         self.a = a
         super().__init__()
 
-    def potential(self, x: np.ndarray) -> float:
+    def potential(self,
+                  x: np.ndarray,
+                  random_key: np.ndarray) -> float:
         return self.a*self.dim + np.sum(x**2 - self.a * np.cos(2 * np.pi * x), axis=-1)
 ```
 
 
 ## Compare samplers
-Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to a desired acceptance rate
+Run MALA and HMC with a Robbins-Monro schedule to adapt the stepsize to desired acceptance rate (defined in e.g. `mala.tuning`)
 ```python
 random_key = random.PRNGKey(0)
 
@@ -40,10 +48,10 @@ scenario_rastrigin = Rastrigin(5)
 n = int(1e5)
 
 mala = mocat.Overdamped()
-mala_samps = mocat.run_mcmc(scenario_rastrigin, mala, n, random_key, correction=mocat.RMMetropolis())
+mala_samps = mocat.run(scenario_rastrigin, mala, n, random_key, correction=mocat.RMMetropolis())
 
 hmc = mocat.HMC(leapfrog_steps=10)
-hmc_samps = mocat.run_mcmc(scenario_rastrigin, hmc, n, random_key, correction=mocat.RMMetropolis())
+hmc_samps = mocat.run(scenario_rastrigin, hmc, n, random_key, correction=mocat.RMMetropolis())
 ```
 
 
@@ -58,11 +66,14 @@ mocat.trace_plot(hmc_samps, last_n=1000, ax=axes[1,1], title=None)
 
 mocat.autocorrelation_plot(mala_samps, ax=axes[2,0], title=None)
 mocat.autocorrelation_plot(hmc_samps, ax=axes[2,1], title=None)
+
+axes[0,0].set_title(scenario_rastrigin.name + ': ' + mala.name)
+axes[0,1].set_title(scenario_rastrigin.name + ': ' + mala.name)
 plt.tight_layout()
 ```
 ![comp-metrics](examples/images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
 
-Plus functionality for effective run size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
+Plus functionality for effective sample size, acceptance rate, squared jumping distance, kernelised Stein discrepancies...
 
 
 ## Create your own MCMC sampler
@@ -82,11 +93,21 @@ class Underdamped(mocat.MCMCSampler):
         self.parameters.friction = friction
         self.tuning.target = 0.651
 
-    def startup(self, scenario, random_key):
-        super().startup(scenario, random_key)
-        self.initial_state.grad_potential = scenario.grad_potential(self.initial_state.value)
-        if not hasattr(self.initial_state, 'momenta') or self.initial_state.momenta.shape[-1] != scenario.dim:
-            self.initial_state.momenta = np.zeros(scenario.dim)
+    def startup(self,
+                scenario: Scenario,
+                n: int,
+                random_key: np.ndarray = None,
+                initial_state: cdict = None,
+                initial_extra: cdict = None,
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, random_key,
+                                                       initial_state, initial_extra, **kwargs)
+        initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
+        initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
+                                                                                            scen_key)
+        if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
+            initial_state.momenta = np.zeros(scenario.dim)
+        return initial_state, initial_extra
 
     def always(self, scenario, reject_state, reject_extra):
         d = scenario.dim
@@ -101,15 +122,18 @@ class Underdamped(mocat.MCMCSampler):
                                + np.sqrt(1 - np.exp(- 2 * friction * stepsize)) * random.normal(subkey, (d,))
         return reject_state, reject_extra
 
-    def proposal(self, scenario, reject_state, reject_extra):
-        stepsize = reject_extra.parameters.stepsize
-        
-        proposed_state = mocat.utils.leapfrog(reject_state,
-                                              scenario.grad_potential,
-                                              stepsize,
-                                              self.parameters.leapfrog_steps)[-1]
-        proposed_state.momenta = proposed_state.momenta * -1
-
+    def proposal(self,
+                 scenario: Scenario,
+                 reject_state: cdict,
+                 reject_extra: cdict) -> Tuple[cdict, cdict]:
+        random_keys = random.split(reject_extra.random_key, self.parameters.leapfrog_steps + 1)
+        reject_extra.random_key = random_keys[0]
+        all_leapfrog_state = mocat.utils.leapfrog(scenario.potential_and_grad,
+                                            reject_state,
+                                            reject_extra.parameters.stepsize,
+                                            random_keys[1:])
+        proposed_state = all_leapfrog_state[-1]
+        proposed_state.momenta *= -1
         return proposed_state, reject_extra
 
     def acceptance_probability(self, scenario, reject_state, reject_extra, proposed_state, proposed_extra):
@@ -117,7 +141,6 @@ class Underdamped(mocat.MCMCSampler):
                                + reject_state.potential
                                - mocat.utils.gaussian_potential(proposed_state.momenta)
                                + mocat.utils.gaussian_potential(reject_state.momenta))
-
         return np.minimum(1., pre_min_alpha)
 ```
 

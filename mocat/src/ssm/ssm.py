@@ -9,7 +9,7 @@ from functools import partial
 from typing import Union
 
 import jax.numpy as np
-from jax import vmap, grad, jit
+from jax import vmap, grad, value_and_grad
 from jax.lax import scan
 from jax import random
 
@@ -31,13 +31,16 @@ class StateSpaceModel:
             setattr(self, key, value)
 
         if not hasattr(self, 'grad_initial_potential'):
-            self.grad_initial_potential = jit(grad(self.initial_potential, argnums=0))
+            self.grad_initial_potential = grad(self.initial_potential)
+            self.initial_potential_and_grad = value_and_grad(self.initial_potential)
 
         if not hasattr(self, 'grad_transition_potential'):
-            self.grad_transition_potential = jit(grad(self.transition_potential, argnums=(0, 2)))
+            self.grad_transition_potential = grad(self.transition_potential, argnums=(0, 2))
+            self.transition_potential_and_grad = value_and_grad(self.transition_potential, argnums=(0, 2))
 
         if not hasattr(self, 'grad_likelihood_potential'):
-            self.grad_likelihood_potential = jit(grad(self.likelihood_potential, argnums=0))
+            self.grad_likelihood_potential = grad(self.likelihood_potential)
+            self.likelihood_potential_and_grad = value_and_grad(self.initial_potential)
 
     def __repr__(self):
         return f"mocat.StateSpaceModel.{self.__class__.__name__}"
@@ -104,7 +107,6 @@ class StateSpaceModel:
         else:
             return self._smoothing_potential(x_all, y_all, t_all)
 
-    @partial(jit, static_argnums=(0,))
     def _grad_smoothing_potential(self,
                                   x_all: np.ndarray,
                                   y_all: np.ndarray,
@@ -125,7 +127,7 @@ class StateSpaceModel:
                                  t_all: np.ndarray) -> Union[float, np.ndarray]:
         if len(t_all) == 1:
             return (self.grad_initial_potential(x_all[0], t_all[0])
-                     + self.grad_likelihood_potential(x_all[0], y_all[0], t_all[0]))[np.newaxis]
+                    + self.grad_likelihood_potential(x_all[0], y_all[0], t_all[0]))[np.newaxis]
         elif len(t_all) == 2:
             grad_trans_pot = self.grad_transition_potential(x_all[0], t_all[0], x_all[1], t_all[1])
             return np.vstack([self.grad_initial_potential(x_all[0], t_all[0]) + grad_trans_pot[0] \

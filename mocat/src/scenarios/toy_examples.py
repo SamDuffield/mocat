@@ -24,7 +24,8 @@ class Gaussian(Scenario):
     def __init__(self,
                  dim: int = 1,
                  mean: Union[float, np.ndarray] = None,
-                 covariance: Union[float, np.ndarray] = None):
+                 covariance: Union[float, np.ndarray] = None,
+                 **kwargs):
         if mean is not None:
             self.dim = mean.shape[-1]
         elif covariance is not None:
@@ -33,7 +34,7 @@ class Gaussian(Scenario):
             self.dim = dim
         self.mean = np.zeros(dim) if mean is None else mean
         self.covariance = np.eye(dim) if covariance is None else covariance
-        super().__init__()
+        super().__init__(**kwargs)
 
     def likelihood_potential(self,
                              x: np.ndarray,
@@ -55,7 +56,8 @@ class GaussianMixture(Scenario):
     def __init__(self,
                  means: np.ndarray,
                  covariances: np.ndarray = None,
-                 weights: np.ndarray = None):
+                 weights: np.ndarray = None,
+                 **kwargs):
         self.means = means[:, np.newaxis] if means.ndim == 1 else means
         self.dim = self.means.shape[-1]
         if weights is None:
@@ -65,7 +67,7 @@ class GaussianMixture(Scenario):
             self.weights = weights
         self.covariances = covariances
 
-        super().__init__()
+        super().__init__(**kwargs)
 
     def __setattr__(self, key, value):
         self.__dict__[key] = value
@@ -117,9 +119,10 @@ class DoubleWell(Scenario):
     name = "Double Well"
 
     def __init__(self,
-                 dim: int = 1):
+                 dim: int = 1,
+                 **kwargs):
         self.dim = dim
-        super().__init__()
+        super().__init__(**kwargs)
 
     def likelihood_potential(self,
                              x: np.ndarray,
@@ -133,10 +136,11 @@ class Rastrigin(Scenario):
 
     def __init__(self,
                  dim: int = 1,
-                 a: float = 1.):
+                 a: float = 1.,
+                 **kwargs):
         self.dim = dim
         self.a = a
-        super().__init__()
+        super().__init__(**kwargs)
 
     def likelihood_potential(self,
                              x: np.ndarray,

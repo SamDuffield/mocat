@@ -6,6 +6,7 @@
 ########################################################################################################################
 
 import unittest
+import warnings
 
 import jax.numpy as np
 from jax.scipy.stats import multivariate_normal
@@ -48,8 +49,10 @@ class TestGaussianPotential(unittest.TestCase):
         npt.assert_array_almost_equal(utils.gaussian_potential(x, m, prec[0]),
                                       -multivariate_normal.logpdf(x, m, 1 / prec), decimal=4)
         # test full (omits norm constant)
-        npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x ** 2 * prec)
-        npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m) ** 2 * prec)
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x ** 2 * prec)
+            npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m) ** 2 * prec)
 
     def test_n1_d5(self):
         x = np.ones(5)
@@ -69,8 +72,10 @@ class TestGaussianPotential(unittest.TestCase):
         npt.assert_array_almost_equal(utils.gaussian_potential(x, m, prec=np.diag(prec), det_prec=2 ** 5),
                                       -multivariate_normal.logpdf(x, m, np.linalg.inv(prec)), decimal=5)
         # test full (omits norm constant)
-        npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x.T @ prec @ x)
-        npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m).T @ prec @ (x - m))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x.T @ prec @ x)
+            npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m).T @ prec @ (x - m))
         # test full with det
         npt.assert_array_almost_equal(utils.gaussian_potential(x, prec=prec, det_prec=2 ** 5),
                                       -multivariate_normal.logpdf(x, np.zeros_like(x), np.linalg.inv(prec)), decimal=5)
@@ -81,8 +86,10 @@ class TestGaussianPotential(unittest.TestCase):
         sqrt_prec = np.arange(25).reshape(5, 5) / 100 + np.eye(5)
         prec = sqrt_prec @ sqrt_prec.T
         # test full (omits norm constant)
-        npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x.T @ prec @ x)
-        npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m).T @ prec @ (x - m))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            npt.assert_array_equal(utils.gaussian_potential(x, prec=prec), 0.5 * x.T @ prec @ x)
+            npt.assert_array_equal(utils.gaussian_potential(x, m, prec), 0.5 * (x - m).T @ prec @ (x - m))
         # test full with det
         npt.assert_array_almost_equal(utils.gaussian_potential(x, prec=prec, det_prec=np.linalg.det(prec)),
                                       -multivariate_normal.logpdf(x, np.zeros_like(x), np.linalg.inv(prec)), decimal=5)
@@ -102,13 +109,15 @@ class TestGaussianPotential(unittest.TestCase):
         npt.assert_array_equal(utils.gaussian_potential(x, m),
                                np.repeat(-multivariate_normal.logpdf(x[0], m, 1.), 5))
 
-        sqrt_prec = np.array([[5., 0.], [2., 3.]])
-        npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
-                               np.ones(5) * 29)
-        npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
-                               np.repeat(0.5 * x[0].T @ sqrt_prec @ sqrt_prec.T @ x[0], 5))
-        npt.assert_array_equal(utils.gaussian_potential(x, m, sqrt_prec=sqrt_prec),
-                               np.repeat(0.5 * (x[0] - m).T @ sqrt_prec @ sqrt_prec.T @ (x[0] - m), 5))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            sqrt_prec = np.array([[5., 0.], [2., 3.]])
+            npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
+                                   np.ones(5) * 29)
+            npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
+                                   np.repeat(0.5 * x[0].T @ sqrt_prec @ sqrt_prec.T @ x[0], 5))
+            npt.assert_array_equal(utils.gaussian_potential(x, m, sqrt_prec=sqrt_prec),
+                                   np.repeat(0.5 * (x[0] - m).T @ sqrt_prec @ sqrt_prec.T @ (x[0] - m), 5))
 
 
 class TestLeapfrog(unittest.TestCase):

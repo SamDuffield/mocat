@@ -42,8 +42,8 @@ from mocat.src.transport.svgd import SVGD
 from mocat.src.metrics import autocorrelation
 from mocat.src.metrics import integrated_autocorrelation_time
 from mocat.src.metrics import ess_autocorrelation
-from mocat.src.metrics import log_ess_log_weights
-from mocat.src.metrics import ess_log_weights
+from mocat.src.metrics import log_ess_log_weight
+from mocat.src.metrics import ess_log_weight
 from mocat.src.metrics import squared_jumping_distance
 from mocat.src.metrics import ksd
 from mocat.src.metrics import metric_plot

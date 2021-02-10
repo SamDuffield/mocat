@@ -20,6 +20,7 @@ class TestSSM(unittest.TestCase):
     len_t: int = 20
     t: np.ndarray = np.arange(len_t, dtype='float32')
     max_rejections: int = 2
+    n: int = int(2e3)
 
     def _test_simulate(self):
 
@@ -36,10 +37,10 @@ class TestSSM(unittest.TestCase):
                                                           self.sim_samps.y,
                                                           self.t,
                                                           random.PRNGKey(0),
-                                                          n=int(1e4))
+                                                          n=self.n)
 
-        npt.assert_array_less(self.sim_samps.x, np.max(self.pf_samps.value, axis=1))
-        npt.assert_array_less(np.min(self.pf_samps.value, axis=1), self.sim_samps.x)
+        npt.assert_array_less(self.sim_samps.x[:, 0], np.max(self.pf_samps.value, axis=1)[:, 0])
+        npt.assert_array_less(np.min(self.pf_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
 
     def backward_preprocess(self):
         if not hasattr(self, 'sim_samps'):
@@ -53,53 +54,31 @@ class TestSSM(unittest.TestCase):
                                                               n=int(1e4))
 
     def backward_postprocess(self):
-        npt.assert_array_less(self.sim_samps.x, np.max(self.backward_samps.value, axis=1))
-        npt.assert_array_less(np.min(self.backward_samps.value, axis=1), self.sim_samps.x)
-        self.assertFalse(hasattr(self.backward_samps, 'log_weights'))
+        npt.assert_array_less(self.sim_samps.x[:, 0], np.max(self.backward_samps.value, axis=1)[:, 0])
+        npt.assert_array_less(np.min(self.backward_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        self.assertFalse(hasattr(self.backward_samps, 'log_weight'))
 
-    def _test_ffbsi_full_no_bound(self):
+    def _test_ffbsi_full(self):
         self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
-                                                  0,
-                                                  0.,
-                                                  random.PRNGKey(0))
+                                                  random.PRNGKey(0),
+                                                  self.n,
+                                                  maximum_rejections=0)
         self.backward_postprocess()
 
-    def _test_ffbsi_rejection_no_bound(self):
+    def _test_ffbsi_rejection(self):
         self.backward_preprocess()
         self.backward_samps = backward_simulation(self.ssm_scenario,
                                                   self.pf_samps,
-                                                  self.max_rejections,
-                                                  0.,
-                                                  random.PRNGKey(0))
+                                                  random.PRNGKey(0),
+                                                  self.n,
+                                                  maximum_rejections=self.max_rejections)
         self.backward_postprocess()
 
-    def _test_ffbsi_full_bound(self, bound: float):
-        self.backward_preprocess()
-        self.backward_samps = backward_simulation(self.ssm_scenario,
-                                                  self.pf_samps,
-                                                  0,
-                                                  bound,
-                                                  random.PRNGKey(0))
-        self.backward_postprocess()
-
-    def _test_ffbsi_rejection_bound(self, bound: float):
-        self.backward_preprocess()
-        self.backward_samps = backward_simulation(self.ssm_scenario,
-                                                  self.pf_samps,
-                                                  self.max_rejections,
-                                                  bound,
-                                                  random.PRNGKey(0))
-        self.backward_postprocess()
-
-    def _test_backward_no_bound(self):
-        self._test_ffbsi_full_no_bound()
-        self._test_ffbsi_rejection_no_bound()
-
-    def _test_backward_bound(self, bound: float):
-        self._test_ffbsi_full_bound(bound)
-        self._test_ffbsi_rejection_bound(bound)
+    def _test_backward(self):
+        self._test_ffbsi_full()
+        self._test_ffbsi_rejection()
 
 
 if __name__ == '__main__':

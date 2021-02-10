@@ -68,17 +68,16 @@ def ess_autocorrelation(sample: Union[np.ndarray, cdict],
     return len(vals) / iat
 
 
-def log_ess_log_weights(log_weights: Union[np.ndarray, cdict]) -> float:
-    if isinstance(log_weights, cdict) and hasattr(log_weights, 'log_weight'):
-        log_weights = log_weights.log_weight
-    else:
-        raise TypeError('log_weights must be np.ndarray or cdict with log_weight attribute')
-    log_ess = 2 * logsumexp(log_weights) - logsumexp(2 * log_weights)
-    return np.exp(log_ess)
+def log_ess_log_weight(log_weight: Union[np.ndarray, cdict]) -> float:
+    if isinstance(log_weight, cdict) and hasattr(log_weight, 'log_weight'):
+        log_weight = log_weight.log_weight
+    if not isinstance(log_weight, np.ndarray):
+        raise TypeError('log_weight must be np.ndarray or cdict with log_weight attribute')
+    return 2 * logsumexp(log_weight) - logsumexp(2 * log_weight)
 
 
-def ess_log_weights(log_weights: Union[np.ndarray, cdict]) -> float:
-    return np.exp(log_ess_log_weights(log_weights))
+def ess_log_weight(log_weight: Union[np.ndarray, cdict]) -> float:
+    return np.exp(log_ess_log_weight(log_weight))
 
 
 def squared_jumping_distance(sample: Union[np.ndarray, cdict]) -> float:
@@ -91,7 +90,7 @@ def squared_jumping_distance(sample: Union[np.ndarray, cdict]) -> float:
 def ksd(sample: Union[np.ndarray, cdict],
         kernel: Kernel,
         grad_potential: np.ndarray = None,
-        log_weights: np.ndarray = None,
+        log_weight: np.ndarray = None,
         **kernel_params) -> float:
     vals = sample.value if isinstance(sample, cdict) else sample
 
@@ -102,8 +101,8 @@ def ksd(sample: Union[np.ndarray, cdict],
 
     n = len(vals)
 
-    if log_weights is not None:
-        weights = np.exp(log_weights)
+    if log_weight is not None:
+        weights = np.exp(log_weight)
         weights /= weights.sum()
     else:
         weights = np.ones(n) / n

@@ -33,7 +33,7 @@ class Test1D(TestSSM):
         super()._test_bootstrap()
 
     def test_backward(self):
-        super()._test_backward_no_bound()
+        super()._test_backward()
 
 
 class Test5D(TestSSM):
@@ -47,7 +47,7 @@ class Test5D(TestSSM):
         super()._test_bootstrap()
 
     def test_backward(self):
-        super()._test_backward_no_bound()
+        super()._test_backward()
 
 
 if __name__ == '__main__':
