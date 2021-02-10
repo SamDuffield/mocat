@@ -17,7 +17,7 @@ pip install mocat
 ## Define a target distribution
 We always work with the target's potential (negative log density)
 ```python
-from jax import numpy as np, random
+from jax import numpy as jnp, random
 import matplotlib.pyplot as plt
 import mocat
 
@@ -32,9 +32,9 @@ class Rastrigin(mocat.Scenario):
         super().__init__()
 
     def potential(self,
-                  x: np.ndarray,
-                  random_key: np.ndarray) -> float:
-        return self.a*self.dim + np.sum(x**2 - self.a * np.cos(2 * np.pi * x), axis=-1)
+                  x: jnp.ndarray,
+                  random_key: jnp.ndarray) -> float:
+        return self.a*self.dim + jnp.sum(x**2 - self.a * jnp.cos(2 * jnp.pi * x), axis=-1)
 ```
 
 
@@ -96,7 +96,7 @@ class Underdamped(mocat.MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -106,7 +106,7 @@ class Underdamped(mocat.MCMCSampler):
         initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
                                                                                             scen_key)
         if not hasattr(initial_state, 'momenta') or initial_state.momenta.shape[-1] != scenario.dim:
-            initial_state.momenta = np.zeros(scenario.dim)
+            initial_state.momenta = jnp.zeros(scenario.dim)
         return initial_state, initial_extra
 
     def always(self, scenario, reject_state, reject_extra):
@@ -118,8 +118,8 @@ class Underdamped(mocat.MCMCSampler):
         reject_state.momenta = reject_state.momenta * -1
 
         reject_extra.random_key, subkey = random.split(reject_extra.random_key)
-        reject_state.momenta = reject_state.momenta * np.exp(- friction * stepsize) \
-                               + np.sqrt(1 - np.exp(- 2 * friction * stepsize)) * random.normal(subkey, (d,))
+        reject_state.momenta = reject_state.momenta * jnp.exp(- friction * stepsize) \
+                               + jnp.sqrt(1 - jnp.exp(- 2 * friction * stepsize)) * random.normal(subkey, (d,))
         return reject_state, reject_extra
 
     def proposal(self,
@@ -137,11 +137,11 @@ class Underdamped(mocat.MCMCSampler):
         return proposed_state, reject_extra
 
     def acceptance_probability(self, scenario, reject_state, reject_extra, proposed_state, proposed_extra):
-        pre_min_alpha = np.exp(- proposed_state.potential
+        pre_min_alpha = jnp.exp(- proposed_state.potential
                                + reject_state.potential
                                - mocat.utils.gaussian_potential(proposed_state.momenta)
                                + mocat.utils.gaussian_potential(reject_state.momenta))
-        return np.minimum(1., pre_min_alpha)
+        return jnp.minimum(1., pre_min_alpha)
 ```
 
 

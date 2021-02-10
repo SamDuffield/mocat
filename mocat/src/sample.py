@@ -11,7 +11,7 @@ from functools import partial
 from time import time
 from inspect import isclass
 
-from jax import numpy as np, jit
+from jax import numpy as jnp, jit
 from mocat.src.core import cdict, static_cdict, Scenario
 from mocat.utils import while_loop_stacked
 
@@ -46,7 +46,7 @@ class Sampler:
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -58,7 +58,7 @@ class Sampler:
 
         if not hasattr(self, 'max_iter')\
             or not (isinstance(self.max_iter, int)\
-                    or (isinstance(self.max_iter, np.ndarray) and self.max_iter.dtype == 'int32')):
+                    or (isinstance(self.max_iter, jnp.ndarray) and self.max_iter.dtype == 'int32')):
             raise AttributeError(self.__repr__() + ' max_iter must be int')
 
         if initial_extra is None:
@@ -102,16 +102,19 @@ class Sampler:
         if hasattr(self, 'parameters'):
             summ.parameters = self.parameters
 
+        if hasattr(self, 'tuning'):
+            summ.tuning = self.tuning
+
         return summ
 
 
 def run(scenario: Scenario,
         sampler: Union[Sampler, Type[Sampler]],
         n: int,
-        random_key: Union[None, np.ndarray],
+        random_key: Union[None, jnp.ndarray],
         initial_state: cdict = None,
         initial_extra: cdict = None,
-        **kwargs) -> Union[cdict, Tuple[cdict, np.ndarray]]:
+        **kwargs) -> Union[cdict, Tuple[cdict, jnp.ndarray]]:
 
     if isclass(sampler):
         sampler = sampler(**kwargs)
@@ -130,7 +133,7 @@ def run(scenario: Scenario,
                                transport_kernel,
                                (initial_state, initial_extra),
                                sampler.max_iter)
-    chain = initial_state[np.newaxis] + chain
+    chain = initial_state[jnp.newaxis] + chain
     chain = sampler.clean_chain(scenario, chain)
     chain.value.block_until_ready()
     end = time()

@@ -8,7 +8,7 @@
 from typing import Tuple, Union, Type
 from inspect import isclass
 
-from jax import random, numpy as np
+from jax import random, numpy as jnp
 from jax.lax import cond
 
 from mocat.src.core import cdict, Scenario
@@ -18,8 +18,8 @@ from mocat.src.mcmc.sampler import MCMCSampler, Correction
 def mh_acceptance_probability(sampler: MCMCSampler,
                               scenario: Scenario,
                               reject_state: cdict, reject_extra: cdict,
-                              proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
-    pre_min_alpha = np.exp(- proposed_state.potential
+                              proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
+    pre_min_alpha = jnp.exp(- proposed_state.potential
                            + reject_state.potential
                            - sampler.proposal_potential(scenario,
                                                         proposed_state, proposed_extra,
@@ -28,7 +28,7 @@ def mh_acceptance_probability(sampler: MCMCSampler,
                                                         reject_state, reject_extra,
                                                         proposed_state, proposed_extra))
 
-    return np.minimum(1., pre_min_alpha)
+    return jnp.minimum(1., pre_min_alpha)
 
 
 class Metropolis(Correction):
@@ -37,7 +37,7 @@ class Metropolis(Correction):
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: np.ndarray,
+                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -56,7 +56,7 @@ class Metropolis(Correction):
         alpha = sampler.acceptance_probability(scenario,
                                                reject_state, reject_extra,
                                                proposed_state, proposed_extra)
-        alpha = np.where(np.isnan(alpha), 0., alpha)
+        alpha = jnp.where(jnp.isnan(alpha), 0., alpha)
 
         random_key, subkey = random.split(proposed_extra.random_key)
         u = random.uniform(subkey)
@@ -75,7 +75,7 @@ class RMMetropolis(Correction):
 
     def __init__(self,
                  super_correction: Union[Correction, Type[Correction]] = Metropolis(),
-                 adapt_cut_off: int = np.inf,
+                 adapt_cut_off: int = jnp.inf,
                  rm_stepsize_scale: float = 1.,
                  rm_stepsize_neg_exponent: float = 2 / 3,
                  log_update: bool = True):
@@ -93,7 +93,7 @@ class RMMetropolis(Correction):
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: np.ndarray,
+                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -154,11 +154,11 @@ class RMMetropolis(Correction):
 
     @staticmethod
     def log_robbins_monro_update(param, metric_value, target, monotonicity, rm_stepsize):
-        log_param = np.log(param)
+        log_param = jnp.log(param)
         new_log_param = RMMetropolis.robbins_monro_update(log_param,
                                                           metric_value,
                                                           target,
                                                           monotonicity,
                                                           rm_stepsize)
-        return np.exp(new_log_param)
+        return jnp.exp(new_log_param)
 

@@ -8,7 +8,7 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 import numpy.testing as npt
 
 from mocat.src.scenarios import toy_examples
@@ -33,7 +33,7 @@ class Test1DGaussian(unittest.TestCase):
         npt.assert_array_equal(self.scenario.grad_potential(5.), 5.)
 
     def test_setcov(self):
-        self.scenario.covariance = np.array([[7.]])
+        self.scenario.covariance = jnp.array([[7.]])
         npt.assert_array_almost_equal(self.scenario.precision_sqrt, 0.37796447)
 
 
@@ -48,17 +48,17 @@ class TestNDGaussian(unittest.TestCase):
         npt.assert_equal(self.scenario.precision_sqrt.shape, (10, 10))
 
     def test_array_potential(self):
-        npt.assert_array_equal(self.scenario.potential(np.zeros(10)), 0.)
-        npt.assert_array_equal(self.scenario.potential(np.ones(10) * 3), 45.)
+        npt.assert_array_equal(self.scenario.potential(jnp.zeros(10)), 0.)
+        npt.assert_array_equal(self.scenario.potential(jnp.ones(10) * 3), 45.)
 
     def test_array_grad_potential(self):
-        npt.assert_array_equal(self.scenario.grad_potential(np.zeros(10)), np.zeros(10))
-        npt.assert_array_equal(self.scenario.grad_potential(np.ones(10) * 3.), np.ones(10) * 3.)
+        npt.assert_array_equal(self.scenario.grad_potential(jnp.zeros(10)), jnp.zeros(10))
+        npt.assert_array_equal(self.scenario.grad_potential(jnp.ones(10) * 3.), jnp.ones(10) * 3.)
 
 
 class Test1DGaussianMixture(unittest.TestCase):
 
-    scenario = toy_examples.GaussianMixture(means=np.array([0, 1]), prior_potential=lambda x, rk: 0.)
+    scenario = toy_examples.GaussianMixture(means=jnp.array([0, 1]), prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
@@ -77,15 +77,15 @@ class Test1DGaussianMixture(unittest.TestCase):
         npt.assert_array_almost_equal(self.scenario.grad_potential(5.), 4.010987)
 
     def test_setcovs(self):
-        self.scenario.covariances = np.repeat(np.array([[7.]])[np.newaxis, :, :], 2, axis=0)
-        npt.assert_array_equal(self.scenario.precisions, np.repeat(np.array([[1 / 7.]])[np.newaxis, :, :], 2, axis=0))
+        self.scenario.covariances = jnp.repeat(jnp.array([[7.]])[jnp.newaxis, :, :], 2, axis=0)
+        npt.assert_array_equal(self.scenario.precisions, jnp.repeat(jnp.array([[1 / 7.]])[jnp.newaxis, :, :], 2, axis=0))
         npt.assert_array_almost_equal(self.scenario.precision_sqrts,
-                                      np.repeat(np.array([[0.37796447]])[np.newaxis, :, :], 2, axis=0))
+                                      jnp.repeat(jnp.array([[0.37796447]])[jnp.newaxis, :, :], 2, axis=0))
 
 
 class TestNDGaussianMixture(unittest.TestCase):
 
-    scenario = toy_examples.GaussianMixture(means=np.arange(15).reshape(5, 3), prior_potential=lambda x, rk: 0.)
+    scenario = toy_examples.GaussianMixture(means=jnp.arange(15).reshape(5, 3), prior_potential=lambda x, rk: 0.)
 
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 3)
@@ -96,12 +96,12 @@ class TestNDGaussianMixture(unittest.TestCase):
         npt.assert_equal(self.scenario.precision_dets.shape, (5,))
 
     def test_array_potential(self):
-        npt.assert_array_almost_equal(self.scenario.potential(np.zeros(3)), 6.8662534)
-        npt.assert_array_almost_equal(self.scenario.potential(np.ones(3) * 2), 6.8552055)
+        npt.assert_array_almost_equal(self.scenario.potential(jnp.zeros(3)), 6.8662534)
+        npt.assert_array_almost_equal(self.scenario.potential(jnp.ones(3) * 2), 6.8552055)
 
     def test_array_grad_potential(self):
-        npt.assert_array_almost_equal(self.scenario.grad_potential(np.zeros(3)), np.array([0., -1, -2]))
-        npt.assert_array_almost_equal(self.scenario.grad_potential(np.ones(3) * 2.), np.array([1.967039,
+        npt.assert_array_almost_equal(self.scenario.grad_potential(jnp.zeros(3)), jnp.array([0., -1, -2]))
+        npt.assert_array_almost_equal(self.scenario.grad_potential(jnp.ones(3) * 2.), jnp.array([1.967039,
                                                                                                0.967039,
                                                                                                -0.032961]))
 
@@ -134,16 +134,16 @@ class TestNDDoubleWell(unittest.TestCase):
         npt.assert_equal(self.scenario.dim, 6)
 
     def test_array_potential(self):
-        npt.assert_array_equal(self.scenario.potential(np.zeros(6)), 0.)
-        npt.assert_array_equal(self.scenario.potential(np.ones(3) * 2), 6.)
-        npt.assert_array_almost_equal(self.scenario.potential(np.arange(6)), 217.25)
+        npt.assert_array_equal(self.scenario.potential(jnp.zeros(6)), 0.)
+        npt.assert_array_equal(self.scenario.potential(jnp.ones(3) * 2), 6.)
+        npt.assert_array_almost_equal(self.scenario.potential(jnp.arange(6)), 217.25)
 
     def test_array_grad_potential(self):
-        npt.assert_array_equal(self.scenario.grad_potential(np.zeros(6)), np.zeros(6))
-        npt.assert_array_equal(self.scenario.grad_potential(np.ones(6)), np.zeros(6))
-        npt.assert_array_equal(self.scenario.grad_potential(-np.zeros(6)), np.zeros(6))
-        npt.assert_array_almost_equal(self.scenario.grad_potential(np.arange(6, dtype='float32')),
-                                      np.array([0., 0., 6., 24., 60., 120.]))
+        npt.assert_array_equal(self.scenario.grad_potential(jnp.zeros(6)), jnp.zeros(6))
+        npt.assert_array_equal(self.scenario.grad_potential(jnp.ones(6)), jnp.zeros(6))
+        npt.assert_array_equal(self.scenario.grad_potential(-jnp.zeros(6)), jnp.zeros(6))
+        npt.assert_array_almost_equal(self.scenario.grad_potential(jnp.arange(6, dtype='float32')),
+                                      jnp.array([0., 0., 6., 24., 60., 120.]))
 
 
 if __name__ == '__main__':

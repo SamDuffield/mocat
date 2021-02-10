@@ -8,7 +8,7 @@
 
 from typing import Tuple
 
-from jax import numpy as np, random
+from jax import numpy as jnp, random
 from mocat.src.abc.abc import ABCScenario, ABCSampler
 from mocat.src.core import cdict, is_implemented
 
@@ -18,26 +18,26 @@ class ImportanceABC(ABCSampler):
 
     def importance_proposal(self,
                             abc_scenario: ABCScenario,
-                            random_key: np.ndarray) -> np.ndarray:
+                            random_key: jnp.ndarray) -> jnp.ndarray:
         raise NotImplementedError(f'{self.__class__.__name__} importance_proposal not initiated')
 
     def importance_potential(self,
                              abc_scenario: ABCScenario,
-                             x: np.ndarray) -> float:
+                             x: jnp.ndarray) -> float:
         raise AttributeError(f'{self.__class__.__name__} importance_potential not initiated')
 
     def log_weight(self,
                    abc_scenario: ABCScenario,
                    state: cdict,
                    extra: cdict):
-        return np.where(state.distance < extra.parameters.threshold,
+        return jnp.where(state.distance < extra.parameters.threshold,
                         -state.prior_potential + self.importance_potential(abc_scenario, state.value),
-                        -np.inf)
+                        -jnp.inf)
 
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -46,7 +46,7 @@ class ImportanceABC(ABCSampler):
                 random_key, sub_key = random.split(random_key)
                 init_vals = abc_scenario.prior_sample(sub_key)
             else:
-                init_vals = np.zeros(abc_scenario.dim)
+                init_vals = jnp.zeros(abc_scenario.dim)
             initial_state = cdict(value=init_vals)
 
         self.max_iter = n
@@ -87,7 +87,7 @@ class VanillaABC(ImportanceABC):
     name = 'Vanilla ABC'
 
     def __init__(self,
-                 threshold: float = np.inf,
+                 threshold: float = jnp.inf,
                  acceptance_rate: float = None,
                  **kwargs):
         super().__init__(**kwargs)
@@ -98,29 +98,29 @@ class VanillaABC(ImportanceABC):
 
     def importance_proposal(self,
                             abc_scenario: ABCScenario,
-                            random_key: np.ndarray) -> np.ndarray:
+                            random_key: jnp.ndarray) -> jnp.ndarray:
         return abc_scenario.prior_sample(random_key)
 
     def importance_potential(self,
                              abc_scenario: ABCScenario,
-                             x: np.ndarray) -> float:
+                             x: jnp.ndarray) -> float:
         return abc_scenario.prior_potential(x)
 
     def log_weight(self,
                    abc_scenario: ABCScenario,
                    state: cdict,
                    extra: cdict):
-        return np.where(state.distance < extra.parameters.threshold,
+        return jnp.where(state.distance < extra.parameters.threshold,
                         0.,
-                        -np.inf)
+                        -jnp.inf)
 
     def clean_chain_ar(self,
                        scenario: ABCScenario,
                        chain_state: cdict):
-        threshold = np.quantile(chain_state.distance, self.parameters.acceptance_rate)
+        threshold = jnp.quantile(chain_state.distance, self.parameters.acceptance_rate)
         self.parameters.threshold = float(threshold)
-        chain_state.log_weight = np.where(chain_state.distance < threshold,
+        chain_state.log_weight = jnp.where(chain_state.distance < threshold,
                                           0.,
-                                          -np.inf)
+                                          -jnp.inf)
         return chain_state
 

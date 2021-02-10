@@ -7,7 +7,7 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax import random
 import numpy.testing as npt
 from mocat.src.ssm.ssm import StateSpaceModel
@@ -18,7 +18,7 @@ from mocat.src.ssm.backward import backward_simulation
 class TestSSM(unittest.TestCase):
     ssm_scenario: StateSpaceModel
     len_t: int = 20
-    t: np.ndarray = np.arange(len_t, dtype='float32')
+    t: jnp.ndarray = jnp.arange(len_t, dtype='float32')
     max_rejections: int = 2
     n: int = int(2e3)
 
@@ -39,8 +39,8 @@ class TestSSM(unittest.TestCase):
                                                           random.PRNGKey(0),
                                                           n=self.n)
 
-        npt.assert_array_less(self.sim_samps.x[:, 0], np.max(self.pf_samps.value, axis=1)[:, 0])
-        npt.assert_array_less(np.min(self.pf_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(self.pf_samps.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(self.pf_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
 
     def backward_preprocess(self):
         if not hasattr(self, 'sim_samps'):
@@ -54,8 +54,8 @@ class TestSSM(unittest.TestCase):
                                                               n=int(1e4))
 
     def backward_postprocess(self):
-        npt.assert_array_less(self.sim_samps.x[:, 0], np.max(self.backward_samps.value, axis=1)[:, 0])
-        npt.assert_array_less(np.min(self.backward_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(self.backward_samps.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(self.backward_samps.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
         self.assertFalse(hasattr(self.backward_samps, 'log_weight'))
 
     def _test_ffbsi_full(self):

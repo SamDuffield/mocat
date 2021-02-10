@@ -6,13 +6,13 @@
 ########################################################################################################################
 from typing import Union, Tuple
 
-from jax import numpy as np, random
+from jax import numpy as jnp, random
 from mocat.src.core import cdict, Scenario, impl_checkable, is_implemented
 from mocat.src.sample import Sampler
 
 
 class ABCScenario(Scenario):
-    data: np.ndarray = None
+    data: jnp.ndarray = None
 
     def __init__(self,
                  name: str = None,
@@ -21,19 +21,19 @@ class ABCScenario(Scenario):
 
     @impl_checkable
     def potential(self,
-                  x: np.ndarray,
-                  random_key: np.ndarray) -> Union[float, np.ndarray]:
+                  x: jnp.ndarray,
+                  random_key: jnp.ndarray) -> Union[float, jnp.ndarray]:
         raise TypeError(f'{self.name} abc_scenario potential is intractable')
 
     @impl_checkable
     def likelihood_potential(self,
-                             x: np.ndarray,
-                             random_key: np.ndarray) -> Union[float, np.ndarray]:
+                             x: jnp.ndarray,
+                             random_key: jnp.ndarray) -> Union[float, jnp.ndarray]:
         raise TypeError(f'{self.name} abc_scenario likelihood_potential is intractable')
 
     def distance_function(self,
-                          simulated_data: np.ndarray) -> Union[float, np.ndarray]:
-        return np.sqrt(np.square(simulated_data - self.data).sum())
+                          simulated_data: jnp.ndarray) -> Union[float, jnp.ndarray]:
+        return jnp.sqrt(jnp.square(simulated_data - self.data).sum())
 
 
 class ABCSampler(Sampler):
@@ -41,7 +41,7 @@ class ABCSampler(Sampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 startup_correction: bool = True,

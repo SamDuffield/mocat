@@ -8,7 +8,7 @@
 
 from typing import Callable
 
-import jax.numpy as np
+import jax.numpy as jnp
 import matplotlib.pyplot as plt
 
 from mocat.src.core import Scenario
@@ -17,7 +17,7 @@ from mocat.src.core import Scenario
 def _flex_vectorise(func: Callable):
     try:
         # Check if already vectorised
-        test_eval = func(np.zeros((3, 2)), None)
+        test_eval = func(jnp.zeros((3, 2)), None)
         if test_eval.shape != (3, ):
             raise TypeError
     except:
@@ -32,7 +32,7 @@ def _flex_vectorise(func: Callable):
             else:
                 raise TypeError('Array of incorrect dimension for vectorisation')
 
-        test_eval = vec_function(np.zeros((3, 2)), None)
+        test_eval = vec_function(jnp.zeros((3, 2)), None)
         if test_eval.shape != (3, ):
             raise TypeError('Scenario potential vectorised successfully but failed sanity check')
 
@@ -47,15 +47,15 @@ def _generate_plot_grid(x_lim: list,
                         linspace: bool = False):
     if y_lim is None:
         y_lim = x_lim
-    x_linspace = np.linspace(x_lim[0], x_lim[1], resolution)
-    y_linspace = np.linspace(y_lim[0], y_lim[1], resolution)
-    x_grid, y_grid = np.meshgrid(x_linspace, y_linspace)
-    joint_grid = np.stack([x_grid, y_grid], axis=2)
+    x_linspace = jnp.linspace(x_lim[0], x_lim[1], resolution)
+    y_linspace = jnp.linspace(y_lim[0], y_lim[1], resolution)
+    x_grid, y_grid = jnp.meshgrid(x_linspace, y_linspace)
+    joint_grid = jnp.stack([x_grid, y_grid], axis=2)
 
     return [x_linspace, y_linspace, joint_grid] if linspace else joint_grid
 
 
-def _find_first_non_zero_row(matrix: np.ndim,
+def _find_first_non_zero_row(matrix: jnp.ndim,
                              direction: int = 1):
     if direction == 1:
         i = 0
@@ -72,15 +72,15 @@ def _find_first_non_zero_row(matrix: np.ndim,
 def auto_axes_lims(vec_dens: Callable,
                    xlim: float = 10.,
                    ylim: float = 10.):
-    # Assumes input is a vectorised function that goes to 0 in the tails
+    # Assumes ijnput is a vectorised function that goes to 0 in the tails
 
     # Initial evaluation grid
     ix, iy, grid = _generate_plot_grid([-xlim, xlim], [-ylim, ylim], resolution=100, linspace=True)
     z = vec_dens(grid)
 
     # Find mode
-    max_z = np.max(z)
-    if np.isnan(max_z):
+    max_z = jnp.max(z)
+    if jnp.isnan(max_z):
         raise TypeError('nan found attempting auto_axes_lims, try giving manual xlim and ylim as kwargs')
 
     if max_z == 0.:
@@ -90,18 +90,18 @@ def auto_axes_lims(vec_dens: Callable,
     z_keep = z > max_z / 10
 
     # Find bounds of area with probability mass
-    xlim_new = np.array([ix[_find_first_non_zero_row(z_keep.T, direction)] for direction in [1, -1]])
-    ylim_new = np.array([iy[_find_first_non_zero_row(z_keep, direction)] for direction in [1, -1]])
+    xlim_new = jnp.array([ix[_find_first_non_zero_row(z_keep.T, direction)] for direction in [1, -1]])
+    ylim_new = jnp.array([iy[_find_first_non_zero_row(z_keep, direction)] for direction in [1, -1]])
 
-    if xlim in np.abs(xlim_new) or ylim in np.abs(ylim_new):
+    if xlim in jnp.abs(xlim_new) or ylim in jnp.abs(ylim_new):
         return auto_axes_lims(vec_dens,
-                              xlim=2*xlim if xlim in np.abs(xlim_new) else xlim,
-                              ylim=2*ylim if ylim in np.abs(ylim_new) else ylim)
+                              xlim=2*xlim if xlim in jnp.abs(xlim_new) else xlim,
+                              ylim=2*ylim if ylim in jnp.abs(ylim_new) else ylim)
 
     # Expand
     expansion = 0.05
-    xlim += (xlim_new[1] - xlim_new[0]) * expansion * np.array([-1, 1])
-    ylim += (ylim_new[1] - ylim_new[0]) * expansion * np.array([-1, 1])
+    xlim += (xlim_new[1] - xlim_new[0]) * expansion * jnp.array([-1, 1])
+    ylim += (ylim_new[1] - ylim_new[0]) * expansion * jnp.array([-1, 1])
 
     return tuple(xlim_new), tuple(ylim_new)
 
@@ -120,13 +120,13 @@ class TwoDimToyScenario(Scenario):
     plot_resolution = 1000
 
     def prior_potential(self,
-                        x: np.ndarray,
-                        random_key: np.ndarray = None) -> float:
+                        x: jnp.ndarray,
+                        random_key: jnp.ndarray = None) -> float:
         return 0.
 
     def _vectorise(self):
         self.vec_potential = _flex_vectorise(self.potential)
-        self.vec_dens = lambda x, rk = None: np.exp(-self.vec_potential(x, rk))
+        self.vec_dens = lambda x, rk = None: jnp.exp(-self.vec_potential(x, rk))
 
     def auto_axes_lims(self, vectorise=True):
         if vectorise:

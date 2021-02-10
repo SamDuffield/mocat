@@ -7,7 +7,7 @@
 
 from typing import Tuple
 
-from jax import numpy as np, random, vmap
+from jax import numpy as jnp, random, vmap
 
 from mocat.src.core import Scenario, cdict, is_implemented
 from mocat.src.sample import Sampler
@@ -18,7 +18,7 @@ class TransportSampler(Sampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -32,7 +32,7 @@ class TransportSampler(Sampler):
 
         if initial_extra is None:
             initial_extra = cdict(random_key=random.split(random_key, n),
-                                  iter=np.zeros(n, dtype='int32'))
+                                  iter=jnp.zeros(n, dtype='int32'))
 
         initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
 

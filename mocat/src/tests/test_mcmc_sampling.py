@@ -7,7 +7,7 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax.random import PRNGKey
 import numpy.testing as npt
 
@@ -27,7 +27,7 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
 
         super().__init__(*args, **kwargs)
 
-        self.scenario_cov = np.array([[1., 0.9], [0.9, 2.]])
+        self.scenario_cov = jnp.array([[1., 0.9], [0.9, 2.]])
         self.scenario = toy_examples.Gaussian(covariance=self.scenario_cov)
         self.n = int(1e5)
 
@@ -40,19 +40,19 @@ class TestMetropolisCorrelatedGaussian(unittest.TestCase):
     def _test_mean(self,
                    sample: cdict):
         if sample.value.ndim == 3:
-            val = np.concatenate(sample.value)
+            val = jnp.concatenate(sample.value)
         else:
             val = sample.value
         samp_mean = val.mean(axis=0)
-        npt.assert_array_almost_equal(samp_mean, np.zeros(2), decimal=1)
+        npt.assert_array_almost_equal(samp_mean, jnp.zeros(2), decimal=1)
 
     def _test_cov(self,
                   sample: cdict):
         if sample.value.ndim == 3:
-            val = np.concatenate(sample.value)
+            val = jnp.concatenate(sample.value)
         else:
             val = sample.value
-        samp_cov = np.cov(val.T)
+        samp_cov = jnp.cov(val.T)
         npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=1)
 
     def _test_ess_autocorrelation(self,

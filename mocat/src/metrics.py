@@ -7,13 +7,13 @@
 
 from typing import Union, Callable, Tuple
 from warnings import warn
+from functools import partial
 
-import jax.numpy as np
 from decorator import decorator
-from jax import vmap
+from jax import vmap, random, numpy as jnp
 from jax.scipy.special import logsumexp
 import \
-    numpy as onp  # For onp.fft.fft(vals, n_samps=n_samps) and onp.unique(vals, axis=0) (JAX doesn't support as of writing)
+    numpy as ojnp  # For ojnp.fft.fft(vals, n_samps=n_samps) and ojnp.unique(vals, axis=0) (JAX doesn't support as of writing)
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
@@ -21,7 +21,7 @@ from mocat.src.core import cdict
 from mocat.src.kernels import Kernel
 
 
-def extract_1d_vals(sample: Union[np.ndarray, cdict]) -> np.ndarray:
+def extract_1d_vals(sample: Union[jnp.ndarray, cdict]) -> jnp.ndarray:
     vals = sample.potential if isinstance(sample, cdict) else sample
     if vals.ndim > 1:
         raise TypeError('vals must be 1 dimensional array or cdict with 1 dimensional potential')
@@ -35,32 +35,32 @@ def _next_pow_two(n: int) -> int:
     return i
 
 
-def autocorrelation(sample: Union[np.ndarray, cdict],
-                    max_lag_eval: int = 1000) -> np.ndarray:
+def autocorrelation(sample: Union[jnp.ndarray, cdict],
+                    max_lag_eval: int = 1000) -> jnp.ndarray:
     vals = extract_1d_vals(sample)
     max_lag_eval = min(max_lag_eval, len(vals))
     n = _next_pow_two(max_lag_eval)
-    f = onp.fft.fft(vals - np.mean(vals), n=2 * n)
-    acf = np.fft.ifft(f * np.conjugate(f))[:max_lag_eval].real
+    f = ojnp.fft.fft(vals - jnp.mean(vals), n=2 * n)
+    acf = jnp.fft.ifft(f * jnp.conjugate(f))[:max_lag_eval].real
     return acf / acf[0]
 
 
-def integrated_autocorrelation_time(sample: Union[np.ndarray, cdict],
+def integrated_autocorrelation_time(sample: Union[jnp.ndarray, cdict],
                                     max_lag_iat: int = None,
                                     max_lag_eval: int = 1000) -> float:
     autocorr = autocorrelation(sample, max_lag_eval)
-    iats_all = 1 + 2 * np.cumsum(autocorr[1:])
+    iats_all = 1 + 2 * jnp.cumsum(autocorr[1:])
 
     # https://dfm.io/posts/autocorr/
     if max_lag_iat is None:
         c = 5
-        m_minus_c_tau = np.arange(1, len(iats_all) + 1) - c * iats_all
-        max_lag_iat = np.argmax(m_minus_c_tau > 0)
+        m_minus_c_tau = jnp.arange(1, len(iats_all) + 1) - c * iats_all
+        max_lag_iat = jnp.argmax(m_minus_c_tau > 0)
 
     return iats_all[max_lag_iat]
 
 
-def ess_autocorrelation(sample: Union[np.ndarray, cdict],
+def ess_autocorrelation(sample: Union[jnp.ndarray, cdict],
                         max_lag_iat: int = None,
                         max_lag_eval: int = 1000) -> float:
     vals = extract_1d_vals(sample)
@@ -68,56 +68,68 @@ def ess_autocorrelation(sample: Union[np.ndarray, cdict],
     return len(vals) / iat
 
 
-def log_ess_log_weight(log_weight: Union[np.ndarray, cdict]) -> float:
+def log_ess_log_weight(log_weight: Union[jnp.ndarray, cdict]) -> float:
     if isinstance(log_weight, cdict) and hasattr(log_weight, 'log_weight'):
         log_weight = log_weight.log_weight
-    if not isinstance(log_weight, np.ndarray):
-        raise TypeError('log_weight must be np.ndarray or cdict with log_weight attribute')
+    if not isinstance(log_weight, jnp.ndarray):
+        raise TypeError('log_weight must be jnp.ndarray or cdict with log_weight attribute')
     return 2 * logsumexp(log_weight) - logsumexp(2 * log_weight)
 
 
-def ess_log_weight(log_weight: Union[np.ndarray, cdict]) -> float:
-    return np.exp(log_ess_log_weight(log_weight))
+def ess_log_weight(log_weight: Union[jnp.ndarray, cdict]) -> float:
+    return jnp.exp(log_ess_log_weight(log_weight))
 
 
-def squared_jumping_distance(sample: Union[np.ndarray, cdict]) -> float:
+def squared_jumping_distance(sample: Union[jnp.ndarray, cdict]) -> float:
     vals = sample.value if isinstance(sample, cdict) else sample
     sjd = vals[1:] - vals[:-1]
     sjd = sjd ** 2
     return sjd.mean(0)
 
 
-def ksd(sample: Union[np.ndarray, cdict],
+def ksd(sample: Union[jnp.ndarray, cdict],
         kernel: Kernel,
-        grad_potential: np.ndarray = None,
-        log_weight: np.ndarray = None,
+        grad_potential: jnp.ndarray = None,
+        log_weight: jnp.ndarray = None,
+        batchsize: int = None,
+        random_key: jnp.ndarray = None,
         **kernel_params) -> float:
     vals = sample.value if isinstance(sample, cdict) else sample
+    n = len(vals)
 
     if grad_potential is None and isinstance(sample, cdict) and hasattr(sample, 'grad_potential'):
         grad_potential = sample.grad_potential
     else:
         raise TypeError('grad_potential not found')
 
-    n = len(vals)
+    if batchsize is None:
+        get_batch_inds = lambda _: jnp.arange(n)
+    else:
+        random_inds = random.choice(random_key, n, shape=(n, batchsize))
+        get_batch_inds = lambda i: random_inds[i]
 
     if log_weight is not None:
-        weights = np.exp(log_weight)
-        weights /= weights.sum()
+        weights = jnp.exp(log_weight)
     else:
-        weights = np.ones(n) / n
+        weights = jnp.ones(n)
 
-    def k_0_inds(x_i, y_i):
-        kern_diag_grad_xy_mat = np.sum(kernel.diag_grad_xy(vals[x_i], vals[y_i], **kernel_params))
-        grad_kx_grad_py_mat = np.dot(kernel.grad_x(vals[x_i], vals[y_i], **kernel_params), grad_potential[y_i])
-        grad_ky_grad_px_mat = np.dot(grad_potential[x_i], kernel.grad_y(vals[x_i], vals[y_i], **kernel_params))
-        kern_grad_pxy = kernel(vals[x_i], vals[y_i], **kernel_params) * np.dot(grad_potential[x_i],
-                                                                               grad_potential[y_i])
+    sum_weights = weights.sum()
+
+    def k_0_inds(x_i: int, y_i: int) -> float:
+        kern_diag_grad_xy_mat = jnp.sum(kernel.diag_grad_xy(vals[x_i], vals[y_i], **kernel_params))
+        grad_kx_grad_py_mat = jnp.dot(kernel.grad_x(vals[x_i], vals[y_i], **kernel_params), grad_potential[y_i])
+        grad_ky_grad_px_mat = jnp.dot(grad_potential[x_i], kernel.grad_y(vals[x_i], vals[y_i], **kernel_params))
+        kern_grad_pxy = kernel(vals[x_i], vals[y_i], **kernel_params) * jnp.dot(grad_potential[x_i],
+                                                                                grad_potential[y_i])
 
         return (kern_diag_grad_xy_mat + grad_kx_grad_py_mat + grad_ky_grad_px_mat + kern_grad_pxy) \
                * weights[x_i] * weights[y_i]
 
-    return np.sqrt((vmap(lambda i: vmap(lambda j: k_0_inds(i, j))(np.arange(n)))(np.arange(n))).sum())
+    def v_k_0(i: int) -> jnp.ndarray:
+        batch_inds = get_batch_inds(i)
+        return vmap(partial(k_0_inds, i))(batch_inds) / (sum_weights * weights[batch_inds].sum())
+
+    return jnp.sqrt((vmap(v_k_0)(jnp.arange(n))).sum())
 
 
 @decorator
@@ -135,7 +147,7 @@ def metric_plot(plot_func: Callable,
 
 
 @metric_plot
-def autocorrelation_plot(sample: Union[np.ndarray, cdict],
+def autocorrelation_plot(sample: Union[jnp.ndarray, cdict],
                          max_lag_plot: int = 100,
                          max_lag_eval: int = 1000,
                          ax: plt.Axes = None,
@@ -148,7 +160,7 @@ def autocorrelation_plot(sample: Union[np.ndarray, cdict],
 
 
 @metric_plot
-def trace_plot(sample: Union[np.ndarray, cdict],
+def trace_plot(sample: Union[jnp.ndarray, cdict],
                last_n: int = None,
                ax: plt.Axes = None,
                **kwargs):
@@ -162,7 +174,7 @@ def trace_plot(sample: Union[np.ndarray, cdict],
 
 
 @metric_plot
-def plot_2d_samples(sample: Union[np.ndarray, cdict],
+def plot_2d_samples(sample: Union[jnp.ndarray, cdict],
                     dim1: int = 0,
                     dim2: int = 1,
                     s: float = 0.5,
@@ -171,7 +183,7 @@ def plot_2d_samples(sample: Union[np.ndarray, cdict],
     vals = sample.value if isinstance(sample, cdict) else sample
 
     if vals.ndim == 3:
-        vals = np.concatenate(vals)
+        vals = jnp.concatenate(vals)
         warn('Concatenating 3 dimensional array to plot')
     if vals.ndim == 1 or vals.shape[-1] == 1:
         raise TypeError('Samples are one dimensional - try mocat.hist_1d_samples')
@@ -179,7 +191,7 @@ def plot_2d_samples(sample: Union[np.ndarray, cdict],
 
 
 @metric_plot
-def hist_1d_samples(sample: Union[np.ndarray, cdict],
+def hist_1d_samples(sample: Union[jnp.ndarray, cdict],
                     dim: int = 0,
                     bins: int = 50,
                     density: bool = True,
@@ -188,8 +200,8 @@ def hist_1d_samples(sample: Union[np.ndarray, cdict],
     vals = sample.value if isinstance(sample, cdict) else sample
 
     if vals.ndim == 1:
-        vals = vals[..., np.newaxis]
+        vals = vals[..., jnp.newaxis]
     if vals.ndim == 3:
-        vals = np.concatenate(vals)
+        vals = jnp.concatenate(vals)
 
     ax.hist(vals[:, dim], bins=bins, density=density, **kwargs)

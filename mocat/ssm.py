@@ -17,7 +17,7 @@ from mocat.src.ssm.linear_gaussian.linear_gaussian import LinearGaussian
 from mocat.src.ssm.linear_gaussian.linear_gaussian import TimeHomogenousLinearGaussian
 
 from mocat.src.ssm.nonlinear_gaussian import NonLinearGaussian
-from mocat.src.ssm.nonlinear_gaussian import OptimalNonLinearGaussianParticleFilter
+from mocat.src.ssm.nonlinear_gaussian import OptimalNonLinearGaussiajnparticleFilter
 from mocat.src.ssm.nonlinear_gaussian import EnsembleKalmanFilter
 
 

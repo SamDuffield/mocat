@@ -9,7 +9,7 @@
 import unittest
 from typing import Tuple
 
-from jax import numpy as np, random
+from jax import numpy as jnp, random
 import numpy.testing as npt
 
 from mocat.src.core import cdict
@@ -22,26 +22,26 @@ from mocat.src.mcmc.standard_mcmc import RandomWalk, Overdamped
 
 
 class TestCorrelatedGaussian(unittest.TestCase):
-    scenario_cov = np.array([[1., 0.9], [0.9, 2.]])
+    scenario_cov = jnp.array([[1., 0.9], [0.9, 2.]])
     scenario = toy_examples.Gaussian(covariance=scenario_cov)
     n = int(1e4)
 
     def _test_mean(self,
                    sample: cdict):
         if sample.value.ndim == 3:
-            val = np.concatenate(sample.value)
+            val = jnp.concatenate(sample.value)
         else:
             val = sample.value
         samp_mean = val.mean(axis=0)
-        npt.assert_array_almost_equal(samp_mean, np.zeros(2), decimal=1)
+        npt.assert_array_almost_equal(samp_mean, jnp.zeros(2), decimal=1)
 
     def _test_cov(self,
                   sample: cdict):
         if sample.value.ndim == 3:
-            val = np.concatenate(sample.value)
+            val = jnp.concatenate(sample.value)
         else:
             val = sample.value
-        samp_cov = np.cov(val.T)
+        samp_cov = jnp.cov(val.T)
         npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=1)
 
 
@@ -104,7 +104,7 @@ class TestSVGD(TestCorrelatedGaussian):
 
 
 class TestMetropolisedSMC(TestCorrelatedGaussian):
-    preschedule = np.arange(0., 1.1, 0.1)
+    preschedule = jnp.arange(0., 1.1, 0.1)
 
     def resample_final(self,
                        sample: cdict) -> cdict:

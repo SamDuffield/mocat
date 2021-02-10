@@ -7,7 +7,7 @@
 
 from typing import Union
 
-import jax.numpy as np
+import jax.numpy as jnp
 
 from mocat.src.scenarios.twodim.vectorise import TwoDimToyScenario
 from mocat.src.scenarios.toy_examples import Gaussian as NDGaussian
@@ -18,8 +18,8 @@ from mocat.src.scenarios.toy_examples import Rastrigin as NDRastrigin
 
 class Gaussian(TwoDimToyScenario, NDGaussian):
     def __init__(self,
-                 mean: np.ndarray = np.array([0., 0.]),
-                 covariance: np.ndarray = None):
+                 mean: jnp.ndarray = jnp.array([0., 0.]),
+                 covariance: jnp.ndarray = None):
         TwoDimToyScenario.__init__(self)
         NDGaussian.__init__(self, 2, mean, covariance)
 
@@ -30,8 +30,8 @@ class Banana(TwoDimToyScenario):
     lengthiness = 100
 
     def likelihood_potential(self,
-                             x: np.ndarray,
-                             random_key: np.ndarray = None) -> Union[float, np.ndarray]:
+                             x: jnp.ndarray,
+                             random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
         return 0.5 * (x[0] ** 2 / self.lengthiness + (x[1] + self.curviness * x[0] ** 2
                                                       - self.lengthiness * self.curviness) ** 2)
 
@@ -40,14 +40,14 @@ class NealFunnel(TwoDimToyScenario):
     name = "Neal's Funnel"
 
     def likelihood_potential(self,
-                             x: np.ndarray,
-                             random_key: np.ndarray = None) -> Union[float, np.ndarray]:
-        return 0.5 * (x[1] ** 2 / 3 + x[0] ** 2 * np.exp(-x[1] / 2))
+                             x: jnp.ndarray,
+                             random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
+        return 0.5 * (x[1] ** 2 / 3 + x[0] ** 2 * jnp.exp(-x[1] / 2))
 
 
 class GaussianMixture(TwoDimToyScenario, NDGaussianMixture):
     def __init__(self,
-                 means: np.ndarray = np.array([[-2, -2], [2, -2], [-2, 2], [2, 2]]),
+                 means: jnp.ndarray = jnp.array([[-2, -2], [2, -2], [-2, 2], [2, 2]]),
                  **kwargs):
         TwoDimToyScenario.__init__(self)
         NDGaussianMixture.__init__(self, means, **kwargs)

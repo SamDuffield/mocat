@@ -7,7 +7,7 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax import random
 import numpy.testing as npt
 
@@ -20,7 +20,7 @@ class TestAutocorrelation(unittest.TestCase):
     ind_draws_arr = random.normal(key, (100,))
     ind_draws_cdict = cdict(value=ind_draws_arr)
 
-    corr_draws_arr = 0.1 * np.cumsum(ind_draws_arr)
+    corr_draws_arr = 0.1 * jnp.cumsum(ind_draws_arr)
     corr_draws_cdict = cdict(value=corr_draws_arr)
 
     ind_draws_cdict_pot = cdict(value=corr_draws_arr,
@@ -31,25 +31,25 @@ class TestAutocorrelation(unittest.TestCase):
     def test_array(self):
         ind_autocorr = metrics.autocorrelation(self.ind_draws_arr)
         self.assertEqual(ind_autocorr[0], 1.)
-        npt.assert_array_equal(np.abs(ind_autocorr[1:]) < 0.3, True)
+        npt.assert_array_equal(jnp.abs(ind_autocorr[1:]) < 0.3, True)
 
         corr_autocorr = metrics.autocorrelation(self.corr_draws_arr)
         self.assertEqual(corr_autocorr[0], 1.)
-        npt.assert_array_equal(np.abs(corr_autocorr[1]) > 0.5, True)
-        npt.assert_array_equal(np.abs(corr_autocorr[50]) < 0.5, True)
-        npt.assert_array_equal(np.abs(corr_autocorr[-1]) < 0.3, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[1]) > 0.5, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[50]) < 0.5, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[-1]) < 0.3, True)
 
     def test_cdict_pot(self):
         # Potential
         ind_autocorr = metrics.autocorrelation(self.ind_draws_cdict_pot)
         self.assertEqual(ind_autocorr[0], 1.)
-        npt.assert_array_equal(np.abs(ind_autocorr[1:]) < 0.3, True)
+        npt.assert_array_equal(jnp.abs(ind_autocorr[1:]) < 0.3, True)
 
         corr_autocorr = metrics.autocorrelation(self.corr_draws_cdict_pot)
         self.assertEqual(corr_autocorr[0], 1.)
-        npt.assert_array_equal(np.abs(corr_autocorr[1]) > 0.5, True)
-        npt.assert_array_equal(np.abs(corr_autocorr[50]) < 0.5, True)
-        npt.assert_array_equal(np.abs(corr_autocorr[-1]) < 0.3, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[1]) > 0.5, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[50]) < 0.5, True)
+        npt.assert_array_equal(jnp.abs(corr_autocorr[-1]) < 0.3, True)
 
 
 class testIAT(unittest.TestCase):
@@ -57,7 +57,7 @@ class testIAT(unittest.TestCase):
     ind_draws_arr = random.normal(key, (100,))
     ind_draws_cdict = cdict(value=ind_draws_arr)
 
-    corr_draws_arr = 0.1 * np.cumsum(ind_draws_arr)
+    corr_draws_arr = 0.1 * jnp.cumsum(ind_draws_arr)
 
     def test_array(self):
         ind_iat = metrics.integrated_autocorrelation_time(self.ind_draws_arr)
@@ -67,9 +67,9 @@ class testIAT(unittest.TestCase):
 
 
 class testSJD(unittest.TestCase):
-    zeros_arr = np.zeros(10)
+    zeros_arr = jnp.zeros(10)
     zeros_cdict = cdict(value=zeros_arr)
-    seq_arr = np.arange(10)
+    seq_arr = jnp.arange(10)
     seq_cdict = cdict(value=seq_arr)
 
     def test_array(self):
@@ -103,8 +103,10 @@ class testKSDStdGaussian(unittest.TestCase):
         kernel = kernels.Gaussian(bandwidth=1.)
         ksd_n_small_a = metrics.ksd(self.sample_n_small, kernel)
         ksd_n_large_a = metrics.ksd(self.sample_n_large, kernel)
+        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, batchsize=100, random_key=self.key)
 
         self.assertLess(ksd_n_large_a, ksd_n_small_a)
+        npt.assert_almost_equal(ksd_n_large_a, ksd_n_large_a_minibatch, 1)
 
         kernel.parameters.bandwidth = 10.
         ksd_n_small_b = metrics.ksd(self.sample_n_small, kernel)
@@ -116,8 +118,10 @@ class testKSDStdGaussian(unittest.TestCase):
         kernel = kernels.IMQ(bandwidth=1., c=1., beta=-0.5)
         ksd_n_small_a = metrics.ksd(self.sample_n_small, kernel)
         ksd_n_large_a = metrics.ksd(self.sample_n_large, kernel)
+        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, batchsize=100, random_key=self.key)
 
         self.assertLess(ksd_n_large_a, ksd_n_small_a)
+        npt.assert_almost_equal(ksd_n_large_a, ksd_n_large_a_minibatch, 1)
 
         kernel.parameters.bandwidth = 10.
         kernel.parameters.c = 0.1

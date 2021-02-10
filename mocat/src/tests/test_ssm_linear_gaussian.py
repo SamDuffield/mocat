@@ -7,18 +7,18 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 from mocat.src.tests.test_ssm import TestSSM
 from mocat.src.ssm.linear_gaussian.linear_gaussian import TimeHomogenousLinearGaussian
 
 
 def create_eye_lgssm(dim: int):
-    return TimeHomogenousLinearGaussian(initial_mean=np.zeros(dim),
-                                        initial_covariance=np.eye(dim),
-                                        transition_matrix=np.eye(dim),
-                                        transition_covariance=np.eye(dim),
-                                        likelihood_matrix=np.eye(dim),
-                                        likelihood_covariance=np.eye(dim),
+    return TimeHomogenousLinearGaussian(initial_mean=jnp.zeros(dim),
+                                        initial_covariance=jnp.eye(dim),
+                                        transition_matrix=jnp.eye(dim),
+                                        transition_covariance=jnp.eye(dim),
+                                        likelihood_matrix=jnp.eye(dim),
+                                        likelihood_covariance=jnp.eye(dim),
                                         name=f'{dim}D-eye LGSSM')
 
 

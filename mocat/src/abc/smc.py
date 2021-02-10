@@ -8,7 +8,7 @@
 from typing import Union, Tuple, Type
 from inspect import isclass
 
-from jax import numpy as np, random, vmap
+from jax import numpy as jnp, random, vmap
 from jax.lax import cond, scan
 
 from mocat.src.abc.abc import ABCScenario, ABCSampler
@@ -23,7 +23,7 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
     name = "ABC SMC"
 
     def __init__(self,
-                 threshold_schedule: Union[None, np.ndarray] = None,
+                 threshold_schedule: Union[None, jnp.ndarray] = None,
                  max_iter: int = int(1e4),
                  **kwargs):
         self.max_iter = max_iter
@@ -43,7 +43,7 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -59,7 +59,7 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
                                                                                double_random_keys[n:])
 
         if not hasattr(initial_state, 'log_weight'):
-            initial_state.log_weight = np.zeros(n)
+            initial_state.log_weight = jnp.zeros(n)
 
         if not hasattr(initial_state, 'simulated_data'):
             double_random_keys = random.split(initial_extra.random_key[0], 2*n)
@@ -70,13 +70,13 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
         if not hasattr(initial_state, 'distance'):
             initial_state.distance = vmap(abc_scenario.distance_function)(initial_extra.simulated_data)
 
-        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(np.arange(n))
+        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(jnp.arange(n))
 
         if not hasattr(initial_state, 'threshold'):
             if self.threshold_schedule is None:
-                initial_state.threshold = np.zeros(n) + np.inf
+                initial_state.threshold = jnp.zeros(n) + jnp.inf
             else:
-                initial_state.threshold = np.zeros(n) + self.threshold_schedule[0]
+                initial_state.threshold = jnp.zeros(n) + self.threshold_schedule[0]
 
         return initial_state, initial_extra
 
@@ -101,8 +101,8 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
 def adapt_stepsize_scaled_diag_cov(ensemble_state: cdict,
                                    ensemble_extra: cdict) -> Tuple[cdict, cdict]:
     n, d = ensemble_state.value.shape
-    stepsize = vmap(np.cov, (1,))(ensemble_state.value) / d * 2.38 ** 2
-    ensemble_extra.parameters.stepsize = np.repeat(stepsize[np.newaxis], n, axis=0)
+    stepsize = vmap(jnp.cov, (1,))(ensemble_state.value) / d * 2.38 ** 2
+    ensemble_extra.parameters.stepsize = jnp.repeat(stepsize[jnp.newaxis], n, axis=0)
     return ensemble_state, ensemble_extra
 
 
@@ -112,7 +112,7 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
                  mcmc_sampler: Union[ABCMCMCSampler, Type[ABCMCMCSampler]] = None,
                  mcmc_correction: Union[Correction, Type[Correction], str] = 'sampler_default',
                  mcmc_steps: int = 20,
-                 threshold_schedule: Union[None, np.ndarray] = None,
+                 threshold_schedule: Union[None, jnp.ndarray] = None,
                  max_iter: int = int(1e4),
                  threshold_quantile_retain: float = 0.75,
                  **kwargs):
@@ -132,7 +132,7 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -150,32 +150,32 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
                                                            extra))(initial_state, initial_extra)
 
         initial_threshold = self.next_threshold(initial_state, initial_extra)
-        initial_state.threshold = np.zeros(n) + initial_threshold
+        initial_state.threshold = jnp.zeros(n) + initial_threshold
         initial_extra.parameters.threshold = initial_state.threshold
         if not hasattr(initial_state, 'log_weight'):
-            initial_state.log_weight = np.zeros(n)
-        initial_state.log_weight = np.where(initial_state.distance < initial_threshold,
-                                            initial_state.log_weight, -np.inf)
+            initial_state.log_weight = jnp.zeros(n)
+        initial_state.log_weight = jnp.where(initial_state.distance < initial_threshold,
+                                            initial_state.log_weight, -jnp.inf)
         initial_state, initial_extra = self.adapt(initial_state, initial_extra)
         return initial_state, initial_extra
 
     def termination_criterion(self,
                               ensemble_state: cdict,
                               ensemble_extra: cdict) -> bool:
-        return np.logical_or(ensemble_state.alpha.mean() <= 0.01,
+        return jnp.logical_or(ensemble_state.alpha.mean() <= 0.01,
                              ensemble_extra.iter[0] >= self.max_iter)
 
     def next_threshold_adaptive(self,
                                 state: cdict,
                                 extra: cdict) -> float:
-        return np.quantile(state.distance, extra.parameters.threshold_quantile_retain[0])
+        return jnp.quantile(state.distance, extra.parameters.threshold_quantile_retain[0])
 
     def log_weight(self,
                    previous_ensemble_state: cdict,
                    previous_ensemble_extra: cdict,
                    new_ensemble_state: cdict,
-                   new_ensemble_extra: cdict) -> np.ndarray:
-        return np.where(new_ensemble_state.distance < new_ensemble_extra.parameters.threshold, 0., -np.inf)
+                   new_ensemble_extra: cdict) -> jnp.ndarray:
+        return jnp.where(new_ensemble_state.distance < new_ensemble_extra.parameters.threshold, 0., -jnp.inf)
 
     def clean_mcmc_chain(self,
                          chain_state: cdict,
@@ -220,7 +220,7 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
         ensemble_extra.iter = ensemble_extra.iter + 1
 
         resample_bool = self.resample_criterion(ensemble_state, ensemble_extra)
-        ensemble_state.log_weight = np.where(resample_bool, 0., ensemble_state.log_weight)
+        ensemble_state.log_weight = jnp.where(resample_bool, 0., ensemble_state.log_weight)
 
         resampled_ensemble_state, resampled_ensemble_extra \
             = cond(resample_bool,
@@ -234,7 +234,7 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
 
         advanced_extra.iter = ensemble_extra.iter
         next_threshold = self.next_threshold(advanced_state, advanced_extra)
-        advanced_state.threshold = np.ones(n) * next_threshold
+        advanced_state.threshold = jnp.ones(n) * next_threshold
         advanced_extra.parameters.threshold = advanced_state.threshold
         advanced_state.log_weight = self.log_weight(ensemble_state, ensemble_extra, advanced_state, advanced_extra)
 

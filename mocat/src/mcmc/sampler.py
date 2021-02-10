@@ -8,7 +8,7 @@
 from typing import Tuple, Union, Type
 from inspect import isclass
 
-from jax import numpy as np, random
+from jax import numpy as jnp, random
 
 from mocat.src.core import Scenario, cdict, is_implemented
 from mocat.src.sample import Sampler
@@ -32,7 +32,7 @@ class MCMCSampler(Sampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 startup_correction: bool = True,
@@ -42,7 +42,7 @@ class MCMCSampler(Sampler):
                 random_key, sub_key = random.split(random_key)
                 init_vals = scenario.prior_sample(sub_key)
             else:
-                init_vals = np.zeros(scenario.dim)
+                init_vals = jnp.zeros(scenario.dim)
             initial_state = cdict(value=init_vals)
 
         self.max_iter = n
@@ -84,13 +84,13 @@ class MCMCSampler(Sampler):
     def proposal_potential(self,
                            scenario: Scenario,
                            reject_state: cdict, reject_extra: cdict,
-                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
+                           proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} proposal_potential not initiated')
 
     def acceptance_probability(self,
                                scenario: Scenario,
                                reject_state: cdict, reject_extra: cdict,
-                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, np.ndarray]:
+                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} acceptance_probability not initiated')
 
     def update(self,
@@ -127,7 +127,7 @@ class Correction:
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: np.ndarray,
+                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:

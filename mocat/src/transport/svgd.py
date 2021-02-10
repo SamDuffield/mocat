@@ -7,7 +7,7 @@
 
 from typing import Tuple, Union, Callable
 
-from jax import numpy as np, vmap, random
+from jax import numpy as jnp, vmap, random
 from jax.experimental.optimizers import adagrad
 
 from mocat.src.core import Scenario, cdict, impl_checkable, is_implemented
@@ -15,18 +15,18 @@ from mocat.src.transport.sampler import TransportSampler
 from mocat.src.kernels import Kernel, Gaussian, mean_bandwidth_update
 
 
-def kernelised_grad_matrix(vals: np.ndarray,
-                           grads: np.ndarray,
+def kernelised_grad_matrix(vals: jnp.ndarray,
+                           grads: jnp.ndarray,
                            kernel: Kernel,
-                           kernel_params: cdict) -> np.ndarray:
+                           kernel_params: cdict) -> jnp.ndarray:
     n = vals.shape[0]
 
     def phi_hat_func(x_i):
         return vmap(lambda x_j: -kernel._call(vals[x_j], vals[x_i], **kernel_params)
                                 * grads[x_j]
-                                + kernel._grad_x(vals[x_j], vals[x_i], **kernel_params))(np.arange(n)).mean(axis=0)
+                                + kernel._grad_x(vals[x_j], vals[x_i], **kernel_params))(jnp.arange(n)).mean(axis=0)
 
-    phi_hat = vmap(phi_hat_func)(np.arange(n))
+    phi_hat = vmap(phi_hat_func)(jnp.arange(n))
     return phi_hat
 
 
@@ -71,7 +71,7 @@ class SVGD(TransportSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -99,9 +99,9 @@ class SVGD(TransportSampler):
         return ensemble_state, ensemble_extra
 
     def kernelised_grad_matrix(self,
-                               vals: np.ndarray,
-                               grads: np.ndarray,
-                               kernel_params: cdict) -> np.ndarray:
+                               vals: jnp.ndarray,
+                               grads: jnp.ndarray,
+                               kernel_params: cdict) -> jnp.ndarray:
         return kernelised_grad_matrix(vals, grads, self.kernel, kernel_params)
 
     def update(self,

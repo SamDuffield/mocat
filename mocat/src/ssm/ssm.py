@@ -8,7 +8,7 @@
 from functools import partial
 from typing import Union
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax import vmap, grad, value_and_grad
 from jax.lax import scan
 from jax import random
@@ -46,45 +46,45 @@ class StateSpaceModel:
         return f"mocat.StateSpaceModel.{self.__class__.__name__}"
 
     def initial_potential(self,
-                          x: np.ndarray,
-                          t: float) -> Union[float, np.ndarray]:
+                          x: jnp.ndarray,
+                          t: float) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} initial_potential not implemented')
 
     def initial_sample(self,
                        t: float,
-                       random_key: np.ndarray) -> Union[float, np.ndarray]:
+                       random_key: jnp.ndarray) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} initial_sample not implemented')
 
     def transition_potential(self,
-                             x_previous: np.ndarray,
+                             x_previous: jnp.ndarray,
                              t_previous: float,
-                             x_new: np.ndarray,
-                             t_new: float) -> Union[float, np.ndarray]:
+                             x_new: jnp.ndarray,
+                             t_new: float) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} transition_potential not implemented')
 
     def transition_sample(self,
-                          x_previous: np.ndarray,
+                          x_previous: jnp.ndarray,
                           t_previous: float,
                           t_new: float,
-                          random_key: np.ndarray) -> np.ndarray:
+                          random_key: jnp.ndarray) -> jnp.ndarray:
         raise AttributeError(f'{self.__class__.__name__} transition_sample not implemented')
 
     def likelihood_potential(self,
-                             x: np.ndarray,
-                             y: np.ndarray,
-                             t: float) -> Union[float, np.ndarray]:
+                             x: jnp.ndarray,
+                             y: jnp.ndarray,
+                             t: float) -> Union[float, jnp.ndarray]:
         raise NotImplementedError(f'{self.__class__.__name__} likelihood_potential not implemented')
 
     def likelihood_sample(self,
-                          x: np.ndarray,
+                          x: jnp.ndarray,
                           t: float,
-                          random_key: np.ndarray) -> np.ndarray:
+                          random_key: jnp.ndarray) -> jnp.ndarray:
         raise AttributeError(f'{self.__class__.__name__} transition_sample not implemented')
 
     def _smoothing_potential(self,
-                             x_all: np.ndarray,
-                             y_all: np.ndarray,
-                             t_all: np.ndarray) -> Union[float, np.ndarray]:
+                             x_all: jnp.ndarray,
+                             y_all: jnp.ndarray,
+                             t_all: jnp.ndarray) -> Union[float, jnp.ndarray]:
         # x_all: shape = (T, d)
         # t_all: shape = (T,)
         # y_all: shape = (T, d_y)
@@ -93,52 +93,52 @@ class StateSpaceModel:
                + vmap(self.likelihood_potential)(x_all, y_all, t_all).sum()
 
     def smoothing_potential(self,
-                            x_all: np.ndarray,
-                            y_all: np.ndarray,
-                            t_all: np.ndarray) -> Union[float, np.ndarray]:
+                            x_all: jnp.ndarray,
+                            y_all: jnp.ndarray,
+                            t_all: jnp.ndarray) -> Union[float, jnp.ndarray]:
         if len(t_all) == 1:
             return self.initial_potential(x_all[0], t_all[0]) \
                    + self.likelihood_potential(x_all[0], y_all[0], t_all[0])
         elif len(t_all) == 2:
             trans_pot = self.transition_potential(x_all[0], t_all[0], x_all[1], t_all[1])
-            return np.vstack([self.initial_potential(x_all[0], t_all[0]) + trans_pot[0] \
+            return jnp.vstack([self.initial_potential(x_all[0], t_all[0]) + trans_pot[0] \
                               + self.likelihood_potential(x_all[0], y_all[0], t_all[0]),
                               trans_pot[1] + self.likelihood_potential(x_all[1], y_all[1], t_all[1])])
         else:
             return self._smoothing_potential(x_all, y_all, t_all)
 
     def _grad_smoothing_potential(self,
-                                  x_all: np.ndarray,
-                                  y_all: np.ndarray,
-                                  t_all: np.ndarray) -> Union[float, np.ndarray]:
+                                  x_all: jnp.ndarray,
+                                  y_all: jnp.ndarray,
+                                  t_all: jnp.ndarray) -> Union[float, jnp.ndarray]:
         # it may well be quicker to do grad(smoothing_potential)
         # but currently there is a jax bug that breaks on combination of scan - grad - vmap - odeint
         initial_grads = self.grad_initial_potential(x_all[0], t_all[0])
         transition_prev_grads, transition_next_grads = vmap(self.grad_transition_potential)(x_all[:-1], t_all[:-1],
                                                                                             x_all[1:], t_all[1:])
         likelihood_grads = vmap(self.grad_likelihood_potential)(x_all, y_all, t_all)
-        return np.vstack([initial_grads + transition_prev_grads[0] + likelihood_grads[0],
+        return jnp.vstack([initial_grads + transition_prev_grads[0] + likelihood_grads[0],
                           transition_prev_grads[1:] + transition_next_grads[:-1] + likelihood_grads[1:-1],
                           transition_next_grads[-1] + likelihood_grads[-1]])
 
     def grad_smoothing_potential(self,
-                                 x_all: np.ndarray,
-                                 y_all: np.ndarray,
-                                 t_all: np.ndarray) -> Union[float, np.ndarray]:
+                                 x_all: jnp.ndarray,
+                                 y_all: jnp.ndarray,
+                                 t_all: jnp.ndarray) -> Union[float, jnp.ndarray]:
         if len(t_all) == 1:
             return (self.grad_initial_potential(x_all[0], t_all[0])
-                    + self.grad_likelihood_potential(x_all[0], y_all[0], t_all[0]))[np.newaxis]
+                    + self.grad_likelihood_potential(x_all[0], y_all[0], t_all[0]))[jnp.newaxis]
         elif len(t_all) == 2:
             grad_trans_pot = self.grad_transition_potential(x_all[0], t_all[0], x_all[1], t_all[1])
-            return np.vstack([self.grad_initial_potential(x_all[0], t_all[0]) + grad_trans_pot[0] \
+            return jnp.vstack([self.grad_initial_potential(x_all[0], t_all[0]) + grad_trans_pot[0] \
                               + self.grad_likelihood_potential(x_all[0], y_all[0], t_all[0]),
                               grad_trans_pot[1] + self.grad_likelihood_potential(x_all[1], y_all[1], t_all[1])])
         else:
             return self._grad_smoothing_potential(x_all, y_all, t_all)
 
     def simulate(self,
-                 t_all: np.ndarray,
-                 random_key: np.ndarray) -> cdict:
+                 t_all: jnp.ndarray,
+                 random_key: jnp.ndarray) -> cdict:
 
         len_t = len(t_all)
 
@@ -154,9 +154,9 @@ class StateSpaceModel:
 
         _, x_all_but_zero = scan(transition_body,
                                  x_init,
-                                 np.arange(1, len_t))
+                                 jnp.arange(1, len_t))
 
-        x_all = np.vstack([x_init, x_all_but_zero])
+        x_all = jnp.vstack([x_init, x_all_but_zero])
 
         y = vmap(self.likelihood_sample)(x_all, t_all, obs_keys)
 

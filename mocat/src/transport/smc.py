@@ -8,7 +8,7 @@
 from typing import Tuple, Union, Type
 from inspect import isclass
 
-from jax import numpy as np, random, vmap
+from jax import numpy as jnp, random, vmap
 from jax.lax import scan, cond
 from jax.scipy.special import logsumexp
 
@@ -47,14 +47,14 @@ class SMCSampler(TransportSampler):
                                                shape=(n,))
         resampled_ensemble_state = ensemble_state[resampled_indices]
         resampled_ensemble_extra = ensemble_extra[resampled_indices]
-        resampled_ensemble_state.log_weight = np.zeros(n)
+        resampled_ensemble_state.log_weight = jnp.zeros(n)
         return resampled_ensemble_state, resampled_ensemble_extra
 
     def log_weight(self,
                    previous_ensemble_state: cdict,
                    previous_ensemble_extra: cdict,
                    new_ensemble_state: cdict,
-                   new_ensemble_extra: cdict) -> np.ndarray:
+                   new_ensemble_extra: cdict) -> jnp.ndarray:
         return previous_ensemble_state.log_weight + new_ensemble_state.log_weight
 
     def update(self,
@@ -87,7 +87,7 @@ class TemperedSMCSampler(SMCSampler):
     name = 'Tempered SMC Sampler'
 
     def __init__(self,
-                 temperature_schedule: Union[None, np.ndarray] = None,
+                 temperature_schedule: Union[None, jnp.ndarray] = None,
                  max_temperature: float = 1.,
                  max_iter: int = int(1e4),
                  **kwargs):
@@ -110,7 +110,7 @@ class TemperedSMCSampler(SMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -125,12 +125,12 @@ class TemperedSMCSampler(SMCSampler):
         initial_state.prior_potential = vmap(scenario.prior_potential)(initial_state.value, random_keys[n:(2*n)])
         initial_state.likelihood_potential = vmap(scenario.likelihood_potential)(initial_state.value, random_keys[(2*n):])
         initial_state.potential = initial_state.prior_potential
-        initial_state.temperature = np.zeros(n)
-        initial_state.log_weight = np.zeros(n)
+        initial_state.temperature = jnp.zeros(n)
+        initial_state.log_weight = jnp.zeros(n)
 
         scenario.temperature = 0.
 
-        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(np.arange(n))
+        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(jnp.arange(n))
 
         return initial_state, initial_extra
 
@@ -142,7 +142,7 @@ class TemperedSMCSampler(SMCSampler):
     def termination_criterion(self,
                               ensemble_state: cdict,
                               ensemble_extra: cdict) -> bool:
-        return np.logical_or(ensemble_state.temperature[0] >= self.max_temperature,
+        return jnp.logical_or(ensemble_state.temperature[0] >= self.max_temperature,
                              ensemble_extra.iter[0] >= self.max_iter)
 
     def clean_chain(self,
@@ -162,7 +162,7 @@ class TemperedSMCSampler(SMCSampler):
         scenario.temperature = prev_temperature
 
         resample_bool = self.resample_criterion(ensemble_state, ensemble_extra)
-        ensemble_state.log_weight = np.where(resample_bool, 0., ensemble_state.log_weight)
+        ensemble_state.log_weight = jnp.where(resample_bool, 0., ensemble_state.log_weight)
 
         resampled_ensemble_state, resampled_ensemble_extra \
             = cond(resample_bool,
@@ -176,7 +176,7 @@ class TemperedSMCSampler(SMCSampler):
 
         advanced_extra.iter = ensemble_extra.iter
         next_temperature = self.next_temperature(advanced_state, advanced_extra)
-        advanced_state.temperature = np.ones(n) * next_temperature
+        advanced_state.temperature = jnp.ones(n) * next_temperature
         advanced_state.log_weight = self.log_weight(ensemble_state, ensemble_extra, advanced_state, advanced_extra)
 
         advanced_state, advanced_extra = self.adapt(advanced_state, advanced_extra)
@@ -192,7 +192,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
                  mcmc_correction: Union[Correction, Type[Correction], str] = 'sampler_default',
                  mcmc_steps: int = 20,
                  max_iter: int = int(1e4),
-                 temperature_schedule: Union[None, np.ndarray] = None,
+                 temperature_schedule: Union[None, jnp.ndarray] = None,
                  max_temperature: float = 1.,
                  ess_threshold: float = 0.8,
                  bisection_tol: float = 1e-5,
@@ -224,7 +224,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: np.ndarray = None,
+                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
@@ -250,16 +250,16 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
     @staticmethod
     def log_ess(current_temperature: float,
                 new_temperature: float,
-                likelihood_potential: np.ndarray) -> float:
+                likelihood_potential: jnp.ndarray) -> float:
         log_weight = - (new_temperature - current_temperature) * likelihood_potential
         return log_ess_log_weight(log_weight)
 
     def next_temperature_adaptive(self,
                                   ensemble_state: cdict,
                                   ensemble_extra: cdict) -> float:
-        temperature_bounds = np.array([ensemble_state.temperature[0], self.max_temperature])
+        temperature_bounds = jnp.array([ensemble_state.temperature[0], self.max_temperature])
         likelihood_potential = ensemble_state.likelihood_potential
-        log_n_samp_threshold = np.log(len(likelihood_potential) * self.parameters.ess_threshold)
+        log_n_samp_threshold = jnp.log(len(likelihood_potential) * self.parameters.ess_threshold)
 
         bisect_out_bounds, bisect_out_evals, bisect_out_iter \
             = bisect(lambda x: self.log_ess(temperature_bounds[0],
@@ -268,7 +268,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
                      temperature_bounds,
                      max_iter=self.parameters.max_bisection_iter,
                      tol=self.parameters.bisection_tol)
-        return bisect_out_bounds[np.argmin(np.abs(bisect_out_evals))]
+        return bisect_out_bounds[jnp.argmin(jnp.abs(bisect_out_evals))]
 
     def clean_mcmc_chain(self,
                          chain_state: cdict,
@@ -314,6 +314,6 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
                    previous_ensemble_state: cdict,
                    previous_ensemble_extra: cdict,
                    new_ensemble_state: cdict,
-                   new_ensemble_extra: cdict) -> np.ndarray:
+                   new_ensemble_extra: cdict) -> jnp.ndarray:
         return - (new_ensemble_state.temperature[0] - previous_ensemble_state.temperature[0]) \
                * new_ensemble_state.likelihood_potential

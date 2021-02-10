@@ -7,7 +7,7 @@
 
 import unittest
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax.random import PRNGKey
 import numpy.testing as npt
 
@@ -21,14 +21,14 @@ from mocat.src.abc.smc import MetropolisedABCSMCSampler
 
 class TestLinearGaussianABC(unittest.TestCase):
 
-    prior_mean = np.zeros(3)
-    prior_covariance = np.array([[1.0, -0.6, 0.5], [-0.6, 0.7, 0.1], [0.5, -0.6, 3.0]])
-    data = np.array([1.4, -2.5])
-    likelihood_matrix = np.array([[1.0, 0.5, 0.], [0.2, 0.3, 1.5]])
-    likelihood_covariance = np.array([[0.02, -0.01], [-0.01, 0.05]])
+    prior_mean = jnp.zeros(3)
+    prior_covariance = jnp.array([[1.0, -0.6, 0.5], [-0.6, 0.7, 0.1], [0.5, -0.6, 3.0]])
+    data = jnp.array([1.4, -2.5])
+    likelihood_matrix = jnp.array([[1.0, 0.5, 0.], [0.2, 0.3, 1.5]])
+    likelihood_covariance = jnp.array([[0.02, -0.01], [-0.01, 0.05]])
 
     kalman_gain = prior_covariance @ likelihood_matrix.T \
-                  @ np.linalg.inv(likelihood_matrix @ prior_covariance @ likelihood_matrix.T + likelihood_covariance)
+                  @ jnp.linalg.inv(likelihood_matrix @ prior_covariance @ likelihood_matrix.T + likelihood_covariance)
     posterior_mean = prior_mean + kalman_gain @ (data - likelihood_matrix @ prior_mean)
     posterior_covariance = prior_covariance - kalman_gain @ likelihood_matrix @ prior_covariance
 
@@ -56,14 +56,14 @@ class TestLinearGaussianABC(unittest.TestCase):
                    precision: float = 3.0):
         val = self.value_from_sample(sample)
         samp_mean = val.mean(axis=0)
-        self.assertLess(np.abs(self.posterior_mean - samp_mean).sum(), precision)
+        self.assertLess(jnp.abs(self.posterior_mean - samp_mean).sum(), precision)
 
     def _test_cov(self,
                   sample: cdict,
                   precision: float = 3.0):
         val = self.value_from_sample(sample)
-        samp_cov = np.cov(val.T)
-        self.assertLess(np.abs(self.posterior_covariance - samp_cov).sum(), precision)
+        samp_cov = jnp.cov(val.T)
+        self.assertLess(jnp.abs(self.posterior_covariance - samp_cov).sum(), precision)
 
 
 class TestVanillaLinearGaussianABC(TestLinearGaussianABC):
@@ -82,8 +82,8 @@ class TestVanillaLinearGaussianABC(TestLinearGaussianABC):
                      random_key=PRNGKey(0))
         self._test_mean(sample, 10.)
         self._test_cov(sample, 10.)
-        npt.assert_almost_equal(np.mean(sample.log_weight == 0), acceptance_rate, decimal=3)
-        self.assertNotEqual(sampler.parameters.threshold, np.inf)
+        npt.assert_almost_equal(jnp.mean(sample.log_weight == 0), acceptance_rate, decimal=3)
+        self.assertNotEqual(sampler.parameters.threshold, jnp.inf)
 
 
 class TestMCMCLinearGaussianABC(TestLinearGaussianABC):
@@ -106,7 +106,7 @@ class TestMCMCLinearGaussianABC(TestLinearGaussianABC):
         self._test_cov(sample)
         npt.assert_almost_equal(sample.alpha.mean(), sampler.tuning.target, decimal=1)
         npt.assert_array_almost_equal(sample.stepsize[-1],
-                                      np.diag(np.cov(sample.value, rowvar=False)) / self.scenario.dim * 2.38 ** 2,
+                                      jnp.diag(jnp.cov(sample.value, rowvar=False)) / self.scenario.dim * 2.38 ** 2,
                                       decimal=1)
 
 
@@ -115,7 +115,7 @@ class TestMetSMCLinearGaussianABC(TestLinearGaussianABC):
     n = int(1e3)
 
     def test_threshold_preschedule(self):
-        threshold_schedule = np.linspace(10, 0.1, 10)
+        threshold_schedule = jnp.linspace(10, 0.1, 10)
         sampler = MetropolisedABCSMCSampler(threshold_schedule=threshold_schedule)
         sample = run(self.scenario, sampler, n=self.n,
                      random_key=PRNGKey(0))

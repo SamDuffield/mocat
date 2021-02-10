@@ -8,7 +8,7 @@
 from functools import partial
 from typing import Union, Tuple
 
-import jax.numpy as np
+import jax.numpy as jnp
 from jax import random, vmap, jit
 from jax.lax import cond, scan
 from jax.ops import index_update
@@ -35,74 +35,74 @@ class ParticleFilter:
 
     def initial_potential(self,
                           ssm_scenario: StateSpaceModel,
-                          x: np.ndarray,
-                          y: np.ndarray,
-                          t: float) -> Union[float, np.ndarray]:
+                          x: jnp.ndarray,
+                          y: jnp.ndarray,
+                          t: float) -> Union[float, jnp.ndarray]:
         return ssm_scenario.initial_potential(x, t)
 
     def initial_sample(self,
                        ssm_scenario: StateSpaceModel,
-                       y: np.ndarray,
+                       y: jnp.ndarray,
                        t: float,
-                       random_key: np.ndarray) -> np.ndarray:
+                       random_key: jnp.ndarray) -> jnp.ndarray:
         return ssm_scenario.initial_sample(t, random_key)
 
     def initial_log_weight(self,
                            ssm_scenario: StateSpaceModel,
-                           x: np.ndarray,
-                           y: np.ndarray,
-                           t: float) -> Union[float, np.ndarray]:
+                           x: jnp.ndarray,
+                           y: jnp.ndarray,
+                           t: float) -> Union[float, jnp.ndarray]:
         return -ssm_scenario.likelihood_potential(x, y, t)
 
     @partial(jit, static_argnums=(0, 1))
     def initial_sample_vectorised(self,
                                   ssm_scenario: StateSpaceModel,
-                                  y: np.ndarray,
+                                  y: jnp.ndarray,
                                   t: float,
-                                  random_keys: np.ndarray) -> np.ndarray:
+                                  random_keys: jnp.ndarray) -> jnp.ndarray:
         init_vals = vmap(self.initial_sample, (None, None, None, 0))(ssm_scenario, y, t, random_keys)
         return init_vals
 
     @partial(jit, static_argnums=(0, 1))
     def initial_sample_and_weight_vectorised(self,
                                              ssm_scenario: StateSpaceModel,
-                                             y: np.ndarray,
+                                             y: jnp.ndarray,
                                              t: float,
-                                             random_keys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+                                             random_keys: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         init_vals = vmap(self.initial_sample, (None, None, None, 0))(ssm_scenario, y, t, random_keys)
 
         if y is not None:
             init_log_weight = vmap(self.initial_log_weight, (None, 0, None, None))(ssm_scenario, init_vals, y, t)
         else:
-            init_log_weight = np.zeros(len(init_vals))
+            init_log_weight = jnp.zeros(len(init_vals))
 
         return init_vals, init_log_weight
 
     def proposal_potential(self,
                            ssm_scenario: StateSpaceModel,
-                           x_previous: np.ndarray,
+                           x_previous: jnp.ndarray,
                            t_previous: float,
-                           x_new: np.ndarray,
-                           y_new: np.ndarray,
-                           t_new: float) -> Union[float, np.ndarray]:
+                           x_new: jnp.ndarray,
+                           y_new: jnp.ndarray,
+                           t_new: float) -> Union[float, jnp.ndarray]:
         raise AttributeError(f'{self.__class__.__name__} transition_potential not implemented')
 
     def proposal_sample(self,
                         ssm_scenario: StateSpaceModel,
-                        x_previous: np.ndarray,
+                        x_previous: jnp.ndarray,
                         t_previous: float,
-                        y_new: np.ndarray,
+                        y_new: jnp.ndarray,
                         t_new: float,
-                        random_key: np.ndarray) -> np.ndarray:
+                        random_key: jnp.ndarray) -> jnp.ndarray:
         raise AttributeError(f'{self.__class__.__name__} proposal_sample not implemented')
 
     def intermediate_log_weight(self,
                                 ssm_scenario: StateSpaceModel,
-                                x_previous: np.ndarray,
+                                x_previous: jnp.ndarray,
                                 t_previous: float,
-                                x_new: np.ndarray,
-                                y_new: np.ndarray,
-                                t_new: float) -> Union[float, np.ndarray]:
+                                x_new: jnp.ndarray,
+                                y_new: jnp.ndarray,
+                                t_new: float) -> Union[float, jnp.ndarray]:
         return - ssm_scenario.transition_potential(x_previous, t_previous,
                                                    x_new, t_new) \
                - ssm_scenario.likelihood_potential(x_new, y_new, t_new) \
@@ -111,11 +111,11 @@ class ParticleFilter:
     @partial(jit, static_argnums=(0, 1))
     def proposal_sample_vectorised(self,
                                    ssm_scenario: StateSpaceModel,
-                                   x_previous: np.ndarray,
+                                   x_previous: jnp.ndarray,
                                    t_previous: float,
-                                   y_new: np.ndarray,
+                                   y_new: jnp.ndarray,
                                    t_new: float,
-                                   random_keys: np.ndarray) -> np.ndarray:
+                                   random_keys: jnp.ndarray) -> jnp.ndarray:
         x_new = vmap(self.proposal_sample, (None, 0, None, None, None, 0))(ssm_scenario,
                                                                            x_previous, t_previous,
                                                                            y_new, t_new,
@@ -125,11 +125,11 @@ class ParticleFilter:
     @partial(jit, static_argnums=(0, 1))
     def propose_and_intermediate_weight_vectorised(self,
                                                    ssm_scenario: StateSpaceModel,
-                                                   x_previous: np.ndarray,
+                                                   x_previous: jnp.ndarray,
                                                    t_previous: float,
-                                                   y_new: np.ndarray,
+                                                   y_new: jnp.ndarray,
                                                    t_new: float,
-                                                   random_keys: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
+                                                   random_keys: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
         x_new = vmap(self.proposal_sample, (None, 0, None, None, None, 0))(ssm_scenario,
                                                                            x_previous, t_previous,
                                                                            y_new, t_new,
@@ -145,37 +145,37 @@ class BootstrapFilter(ParticleFilter):
 
     def proposal_potential(self,
                            ssm_scenario: StateSpaceModel,
-                           x_previous: np.ndarray,
+                           x_previous: jnp.ndarray,
                            t_previous: float,
-                           x_new: np.ndarray,
-                           y_new: np.ndarray,
-                           t_new: float) -> Union[float, np.ndarray]:
+                           x_new: jnp.ndarray,
+                           y_new: jnp.ndarray,
+                           t_new: float) -> Union[float, jnp.ndarray]:
         return ssm_scenario.transition_potential(x_previous, t_previous, x_new, t_new)
 
     def proposal_sample(self,
                         ssm_scenario: StateSpaceModel,
-                        x_previous: np.ndarray,
+                        x_previous: jnp.ndarray,
                         t_previous: float,
-                        y_new: np.ndarray,
+                        y_new: jnp.ndarray,
                         t_new: float,
-                        random_key: np.ndarray) -> np.ndarray:
+                        random_key: jnp.ndarray) -> jnp.ndarray:
         return ssm_scenario.transition_sample(x_previous, t_previous, t_new, random_key)
 
     def intermediate_log_weight(self,
                                 ssm_scenario: StateSpaceModel,
-                                x_previous: np.ndarray,
+                                x_previous: jnp.ndarray,
                                 t_previous: float,
-                                x_new: np.ndarray,
-                                y_new: np.ndarray,
-                                t_new: float) -> Union[float, np.ndarray]:
+                                x_new: jnp.ndarray,
+                                y_new: jnp.ndarray,
+                                t_new: float) -> Union[float, jnp.ndarray]:
         return -ssm_scenario.likelihood_potential(x_new, y_new, t_new)
 
 
 def initiate_particles(ssm_scenario: StateSpaceModel,
                        particle_filter: ParticleFilter,
                        n: int,
-                       random_key: np.ndarray,
-                       y: np.ndarray = None,
+                       random_key: jnp.ndarray,
+                       y: jnp.ndarray = None,
                        t: float = None) -> cdict:
     particle_filter.startup(ssm_scenario)
 
@@ -184,25 +184,25 @@ def initiate_particles(ssm_scenario: StateSpaceModel,
     init_vals, init_log_weight = particle_filter.initial_sample_and_weight_vectorised(ssm_scenario, y, t, sub_keys)
 
     if init_vals.ndim == 1:
-        init_vals = init_vals[..., np.newaxis]
+        init_vals = init_vals[..., jnp.newaxis]
 
-    initial_sample = cdict(value=init_vals[np.newaxis],
-                           log_weight=init_log_weight[np.newaxis],
-                           t=np.atleast_1d(t) if t is not None else np.zeros(1),
-                           y=y[np.newaxis] if y is not None else None,
-                           ess=np.atleast_1d(ess_log_weight(init_log_weight)))
+    initial_sample = cdict(value=init_vals[jnp.newaxis],
+                           log_weight=init_log_weight[jnp.newaxis],
+                           t=jnp.atleast_1d(t) if t is not None else jnp.zeros(1),
+                           y=y[jnp.newaxis] if y is not None else None,
+                           ess=jnp.atleast_1d(ess_log_weight(init_log_weight)))
     return initial_sample
 
 
-def _resample(x_w_r: Tuple[np.ndarray, np.ndarray, np.ndarray]) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+def _resample(x_w_r: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     x, log_weight, random_key = x_w_r
     n = x.shape[-2]
     random_key, sub_key = random.split(random_key)
-    return x[..., random.categorical(sub_key, log_weight, shape=(n,)), :], np.zeros(n), random_key
+    return x[..., random.categorical(sub_key, log_weight, shape=(n,)), :], jnp.zeros(n), random_key
 
 
 def resample_particles(particles: cdict,
-                       random_key: np.ndarray,
+                       random_key: jnp.ndarray,
                        resample_full: bool = True) -> cdict:
     out_particles = particles.copy()
     if out_particles.log_weight.ndim == 1:
@@ -226,9 +226,9 @@ def resample_particles(particles: cdict,
 def propagate_particle_filter(ssm_scenario: StateSpaceModel,
                               particle_filter: ParticleFilter,
                               particles: cdict,
-                              y_new: np.ndarray,
+                              y_new: jnp.ndarray,
                               t_new: float,
-                              random_key: np.ndarray,
+                              random_key: jnp.ndarray,
                               ess_threshold: float = 0.5,
                               resample_full: bool = True) -> cdict:
     n = particles.value.shape[1]
@@ -250,24 +250,24 @@ def propagate_particle_filter(ssm_scenario: StateSpaceModel,
 
     log_weight_new = log_weight_previous + log_weight_new
 
-    out_particles.value = np.append(out_particles.value, x_new, axis=0)
-    out_particles.log_weight = np.append(out_particles.log_weight, log_weight_new, axis=0)
-    out_particles.y = np.append(out_particles.y, y_new)
-    out_particles.t = np.append(out_particles.t, t_new)
-    out_particles.ess = np.append(out_particles.ess, ess_log_weight(log_weight_new))
+    out_particles.value = jnp.append(out_particles.value, x_new, axis=0)
+    out_particles.log_weight = jnp.append(out_particles.log_weight, log_weight_new, axis=0)
+    out_particles.y = jnp.append(out_particles.y, y_new)
+    out_particles.t = jnp.append(out_particles.t, t_new)
+    out_particles.ess = jnp.append(out_particles.ess, ess_log_weight(log_weight_new))
     return out_particles
 
 
 def run_particle_filter_for_marginals(ssm_scenario: StateSpaceModel,
                                       particle_filter: ParticleFilter,
-                                      y: np.ndarray,
-                                      t: np.ndarray,
-                                      random_key: np.ndarray,
+                                      y: jnp.ndarray,
+                                      t: jnp.ndarray,
+                                      random_key: jnp.ndarray,
                                       n: int = None,
                                       initial_sample: cdict = None,
                                       ess_threshold: float = 0.5) -> cdict:
     if y.ndim == 1:
-        y = y[..., np.newaxis]
+        y = y[..., jnp.newaxis]
 
     if initial_sample is None:
         random_key, sub_key = random.split(random_key)
@@ -317,13 +317,13 @@ def run_particle_filter_for_marginals(ssm_scenario: StateSpaceModel,
 
     _, after_init_samps = scan(particle_filter_body,
                                initial_sample[-1],
-                               np.arange(num_propagate_steps))
+                               jnp.arange(num_propagate_steps))
 
     out_samps = initial_sample.copy()
-    out_samps.value = np.append(initial_sample.value, after_init_samps.value, axis=0)
-    out_samps.log_weight = np.append(initial_sample.log_weight, after_init_samps.log_weight, axis=0)
-    out_samps.y = np.append(initial_sample.y, after_init_samps.y, axis=0)
-    out_samps.t = np.append(initial_sample.t, after_init_samps.t)
-    out_samps.ess = np.append(initial_sample.ess, after_init_samps.ess)
+    out_samps.value = jnp.append(initial_sample.value, after_init_samps.value, axis=0)
+    out_samps.log_weight = jnp.append(initial_sample.log_weight, after_init_samps.log_weight, axis=0)
+    out_samps.y = jnp.append(initial_sample.y, after_init_samps.y, axis=0)
+    out_samps.t = jnp.append(initial_sample.t, after_init_samps.t)
+    out_samps.ess = jnp.append(initial_sample.ess, after_init_samps.ess)
 
     return out_samps

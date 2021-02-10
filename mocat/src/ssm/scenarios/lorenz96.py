@@ -5,25 +5,25 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from jax import numpy as np, jit
+from jax import numpy as jnp, jit
 from jax.experimental.ode import odeint
 
 from mocat.src.ssm.nonlinear_gaussian import NonLinearGaussian
 
 
-def lorenz96_dynamics(x: np.ndarray,
+def lorenz96_dynamics(x: jnp.ndarray,
                       t: float,
-                      forcing_constant: float) -> np.ndarray:
+                      forcing_constant: float) -> jnp.ndarray:
     d = len(x)
-    return (x[(np.arange(d) + 1) % d] - x[(np.arange(d) - 2) % d]) * x[(np.arange(d) - 1) % d] \
+    return (x[(jnp.arange(d) + 1) % d] - x[(jnp.arange(d) - 2) % d]) * x[(jnp.arange(d) - 1) % d] \
            - x + forcing_constant
 
 
 @jit
-def lorenz96_integrator(x: np.ndarray,
+def lorenz96_integrator(x: jnp.ndarray,
                          delta_t: float,
-                         forcing_constant: float) -> np.ndarray:
-    return odeint(lorenz96_dynamics, x, np.array([0, delta_t]), forcing_constant)[-1]
+                         forcing_constant: float) -> jnp.ndarray:
+    return odeint(lorenz96_dynamics, x, jnp.array([0, delta_t]), forcing_constant)[-1]
 
 
 class Lorenz96(NonLinearGaussian):
@@ -39,9 +39,9 @@ class Lorenz96(NonLinearGaussian):
         super().__init__(**kwargs)
 
     def transition_function(self,
-                            x_previous: np.ndarray,
+                            x_previous: jnp.ndarray,
                             t_previous: float,
-                            t_new: float) -> np.ndarray:
+                            t_new: float) -> jnp.ndarray:
         return lorenz96_integrator(x_previous, t_new - t_previous, self.forcing_constant)
 
 
