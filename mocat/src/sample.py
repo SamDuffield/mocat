@@ -81,7 +81,7 @@ class Sampler:
     def termination_criterion(self,
                               state: cdict,
                               extra: cdict) -> bool:
-        return extra.iter > self.max_iter
+        return extra.iter >= self.max_iter
 
     def clean_chain(self,
                     scenario: Scenario,
