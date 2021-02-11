@@ -20,6 +20,7 @@ class Sampler:
     parameters: cdict
     name: str
     max_iter: int = 10000
+    random_keys_per_iter: Union[tuple, int]
 
     def __init__(self,
                  name: str = None,
