@@ -5,7 +5,7 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Tuple, Union, Type
+from typing import Tuple, Union, Type, Literal
 from inspect import isclass
 
 from jax import random, numpy as jnp
@@ -32,16 +32,16 @@ def mh_acceptance_probability(sampler: MCMCSampler,
 
 
 class Metropolis(Correction):
+    random_keys_per_iter = 1
 
     def startup(self,
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, sampler, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_state.alpha = 1.
         return initial_state, initial_extra
@@ -58,8 +58,7 @@ class Metropolis(Correction):
                                                proposed_state, proposed_extra)
         alpha = jnp.where(jnp.isnan(alpha), 0., alpha)
 
-        random_key, subkey = random.split(proposed_extra.random_key)
-        u = random.uniform(subkey)
+        u = random.uniform(proposed_extra.random_keys[-1])
 
         new_state, new_extra = cond(u < alpha,
                                     lambda _: (proposed_state, proposed_extra),
@@ -67,11 +66,11 @@ class Metropolis(Correction):
                                     None)
 
         new_state.alpha = alpha
-        new_extra.random_key = random_key
         return new_state, new_extra
 
 
 class RMMetropolis(Correction):
+    random_keys_per_iter = 1
 
     def __init__(self,
                  super_correction: Union[Correction, Type[Correction]] = Metropolis(),
@@ -93,11 +92,10 @@ class RMMetropolis(Correction):
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, sampler, n,
                                                        initial_state, initial_extra, **kwargs)
         # Set tuning parameter (i.e. stepsize) to 2.38^2/d if not initiated and adaptive
         if hasattr(sampler.parameters, sampler.tuning.parameter) \
@@ -107,7 +105,7 @@ class RMMetropolis(Correction):
         setattr(initial_state, sampler.tuning.parameter, getattr(initial_extra.parameters,
                                                                  sampler.tuning.parameter))
 
-        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, n,
                                                                      initial_state, initial_extra, **kwargs)
 
         sampler.tuning.monotonicity = 1 if sampler.tuning.monotonicity in (1, 'increasing') else -1

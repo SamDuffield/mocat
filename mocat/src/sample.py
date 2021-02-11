@@ -11,7 +11,8 @@ from functools import partial
 from time import time
 from inspect import isclass
 
-from jax import numpy as jnp, jit
+from jax import numpy as jnp, jit, random
+from jax.lax import cond
 from mocat.src.core import cdict, static_cdict, Scenario
 from mocat.utils import while_loop_stacked
 
@@ -20,7 +21,7 @@ class Sampler:
     parameters: cdict
     name: str
     max_iter: int = 10000
-    random_keys_per_iter: Union[tuple, int]
+    random_key_shape_per_iter: Union[jnp.ndarray, tuple, int]
 
     def __init__(self,
                  name: str = None,
@@ -47,9 +48,8 @@ class Sampler:
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -57,13 +57,10 @@ class Sampler:
             if hasattr(self, 'parameters') and hasattr(self.parameters, key):
                 setattr(self.parameters, key, value)
 
-        if not hasattr(self, 'max_iter')\
-            or not (isinstance(self.max_iter, int)
-                    or (isinstance(self.max_iter, jnp.ndarray) and self.max_iter.dtype == 'int32')):
+        if not hasattr(self, 'max_iter') \
+                or not (isinstance(self.max_iter, int)
+                        or (isinstance(self.max_iter, jnp.ndarray) and self.max_iter.dtype == 'int32')):
             raise AttributeError(self.__repr__() + ' max_iter must be int')
-
-        if initial_extra is None:
-            initial_extra = cdict(random_key=random_key, iter=0)
 
         if hasattr(self, 'parameters'):
             if not hasattr(initial_extra, 'parameters'):
@@ -115,24 +112,55 @@ def run(scenario: Scenario,
         random_key: Union[None, jnp.ndarray],
         initial_state: cdict = None,
         initial_extra: cdict = None,
+        random_key_batchsize: int = 5000,
         **kwargs) -> Union[cdict, Tuple[cdict, jnp.ndarray]]:
-
     if isclass(sampler):
         sampler = sampler(**kwargs)
 
     sampler.n = n
 
-    initial_state, initial_extra = sampler.startup(scenario, n, random_key, initial_state, initial_extra,
-                                                   **kwargs)
+    random_key_shape_per_iter = jnp.atleast_1d(sampler.random_key_shape_per_iter)
+    num_random_keys_per_iter = random_key_shape_per_iter.prod()
+    random_key_batchsize = jnp.maximum(num_random_keys_per_iter, random_key_batchsize)
+    random_key_batchsize = jnp.minimum(random_key_batchsize, sampler.max_iter * num_random_keys_per_iter)
+    random_key_batchsize = jnp.array(random_key_batchsize, dtype='int32')
+
+    iters_per_batch = jnp.array(jnp.ceil(random_key_batchsize / num_random_keys_per_iter), dtype='int32')
+    random_key_batchsize = iters_per_batch * num_random_keys_per_iter
+
+    generate_new_rk_batch = lambda rk: random.split(rk,
+                                                    random_key_batchsize
+                                                    ).reshape(iters_per_batch, *random_key_shape_per_iter, 2)
+
+    initial_random_keys = generate_new_rk_batch(random_key)
+
+    if initial_extra is None:
+        initial_extra = cdict()
+    initial_extra.random_keys = initial_random_keys[0]
+
+    initial_state, initial_extra = sampler.startup(scenario, n, initial_state, initial_extra, **kwargs)
 
     summary = sampler.summary(scenario, initial_state, initial_extra)
 
-    transport_kernel = jit(partial(sampler.update, scenario))
+    def update_kernel(state: cdict,
+                      extra_w_rks: Tuple[cdict, int, jnp.ndarray]) -> Tuple[cdict, Tuple[cdict, int, jnp.ndarray]]:
+        extra, rk_iter, batch_random_keys = extra_w_rks
+        rk_iter = (rk_iter + 1) % iters_per_batch
+
+        batch_random_keys \
+            = cond(rk_iter == 0,
+                   generate_new_rk_batch,
+                   lambda x: batch_random_keys,
+                   batch_random_keys[-1, 0])
+
+        extra.random_keys = batch_random_keys[rk_iter]
+        state, extra = sampler.update(scenario, state, extra)
+        return state, (extra, rk_iter, batch_random_keys)
 
     start = time()
-    chain = while_loop_stacked(lambda state, extra: ~sampler.termination_criterion(state, extra),
-                               transport_kernel,
-                               (initial_state, initial_extra),
+    chain = while_loop_stacked(lambda state, extra_w_rks: ~sampler.termination_criterion(state, extra_w_rks[0]),
+                               update_kernel,
+                               (initial_state, (initial_extra, 0, initial_random_keys)),
                                sampler.max_iter)
     chain = initial_state[jnp.newaxis] + chain
     chain = sampler.clean_chain(scenario, chain)

@@ -16,6 +16,8 @@ from mocat.src.sample import Sampler
 
 class MCMCSampler(Sampler):
     correction: 'Correction' = None
+    random_keys_per_iter: int = 2
+    random_key_shape_per_iter = (1,)
 
     def __init__(self,
                  **kwargs):
@@ -29,23 +31,27 @@ class MCMCSampler(Sampler):
         # Initiate sampler class (set any additional parameters from init)
         super().__init__(**kwargs)
 
+    @property
+    def random_key_shape_per_iter(self) -> Union[jnp.ndarray, tuple, int]:
+        return self.random_keys_per_iter if self.correction is None\
+            else self.random_keys_per_iter + self.correction.random_keys_per_iter
+
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 startup_correction: bool = True,
                 **kwargs) -> Tuple[cdict, cdict]:
+        self.max_iter = n - 1
+        initial_extra.iter = 0
+
         if initial_state is None:
             if is_implemented(scenario.prior_sample):
-                random_key, sub_key = random.split(random_key)
-                init_vals = scenario.prior_sample(sub_key)
+                init_vals = scenario.prior_sample(initial_extra.random_keys[0])
             else:
                 init_vals = jnp.zeros(scenario.dim)
             initial_state = cdict(value=init_vals)
-
-        self.max_iter = n - 1
 
         if 'correction' in kwargs.keys():
             self.correction = kwargs['correction']
@@ -53,13 +59,10 @@ class MCMCSampler(Sampler):
 
         self.correction = check_correction(self.correction)
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
-
-        if not hasattr(initial_extra, 'iter'):
-            initial_extra.iter = 0
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         if startup_correction:
-            initial_state, initial_extra = self.correction.startup(scenario, self, n, random_key,
+            initial_state, initial_extra = self.correction.startup(scenario, self, n,
                                                                    initial_state, initial_extra, **kwargs)
 
         return initial_state, initial_extra
@@ -116,6 +119,7 @@ class MCMCSampler(Sampler):
 
 
 class Correction:
+    random_keys_per_iter = 0
 
     def __init__(self, **kwargs):
         self.__dict__.update(kwargs)
@@ -127,7 +131,6 @@ class Correction:
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:

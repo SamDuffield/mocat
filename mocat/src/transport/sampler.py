@@ -30,11 +30,9 @@ class TransportSampler(Sampler):
                 init_vals = random.normal(sub_key, shape=(n, scenario.dim))
             initial_state = cdict(value=init_vals)
 
-        if initial_extra is None:
-            initial_extra = cdict(random_key=random.split(random_key, n),
-                                  iter=jnp.zeros(n, dtype='int32'))
+        initial_extra.iter = jnp.zeros(n, dtype='int32')
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         return initial_state, initial_extra
 
