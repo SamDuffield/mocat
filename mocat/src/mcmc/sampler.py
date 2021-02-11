@@ -16,6 +16,7 @@ from mocat.src.sample import Sampler
 
 class MCMCSampler(Sampler):
     correction: 'Correction' = None
+    random_keys_per_iter: Union[tuple, int]
 
     def __init__(self,
                  **kwargs):
