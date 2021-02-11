@@ -45,7 +45,7 @@ class MCMCSampler(Sampler):
                 init_vals = jnp.zeros(scenario.dim)
             initial_state = cdict(value=init_vals)
 
-        self.max_iter = n
+        self.max_iter = n - 1
 
         if 'correction' in kwargs.keys():
             self.correction = kwargs['correction']
