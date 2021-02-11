@@ -57,7 +57,7 @@ class Sampler:
                 setattr(self.parameters, key, value)
 
         if not hasattr(self, 'max_iter')\
-            or not (isinstance(self.max_iter, int)\
+            or not (isinstance(self.max_iter, int)
                     or (isinstance(self.max_iter, jnp.ndarray) and self.max_iter.dtype == 'int32')):
             raise AttributeError(self.__repr__() + ' max_iter must be int')
 
