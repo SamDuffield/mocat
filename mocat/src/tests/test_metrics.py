@@ -103,7 +103,7 @@ class testKSDStdGaussian(unittest.TestCase):
         kernel = kernels.Gaussian(bandwidth=1.)
         ksd_n_small_a = metrics.ksd(self.sample_n_small, kernel)
         ksd_n_large_a = metrics.ksd(self.sample_n_large, kernel)
-        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, batchsize=100, random_key=self.key)
+        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, ensemble_batchsize=100, random_key=self.key)
 
         self.assertLess(ksd_n_large_a, ksd_n_small_a)
         npt.assert_almost_equal(ksd_n_large_a, ksd_n_large_a_minibatch, 1)
@@ -118,7 +118,7 @@ class testKSDStdGaussian(unittest.TestCase):
         kernel = kernels.IMQ(bandwidth=1., c=1., beta=-0.5)
         ksd_n_small_a = metrics.ksd(self.sample_n_small, kernel)
         ksd_n_large_a = metrics.ksd(self.sample_n_large, kernel)
-        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, batchsize=100, random_key=self.key)
+        ksd_n_large_a_minibatch = metrics.ksd(self.sample_n_small, kernel, ensemble_batchsize=100, random_key=self.key)
 
         self.assertLess(ksd_n_large_a, ksd_n_small_a)
         npt.assert_almost_equal(ksd_n_large_a, ksd_n_large_a_minibatch, 1)

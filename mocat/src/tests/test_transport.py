@@ -102,6 +102,14 @@ class TestSVGD(TestCorrelatedGaussian):
         self._test_mean(sample)
         self._test_cov(sample)
 
+    def test_ensemble_minibatch(self):
+        sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=1.0, ensemble_batchsize=100),
+                     n=1000,
+                     random_key=random.PRNGKey(0))
+
+        self._test_mean(sample)
+        self._test_cov(sample)
+
 
 class TestMetropolisedSMC(TestCorrelatedGaussian):
     preschedule = jnp.arange(0., 1.1, 0.1)

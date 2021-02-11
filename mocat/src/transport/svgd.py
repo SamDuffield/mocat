@@ -18,13 +18,15 @@ from mocat.src.kernels import Kernel, Gaussian, mean_bandwidth_update
 def kernelised_grad_matrix(vals: jnp.ndarray,
                            grads: jnp.ndarray,
                            kernel: Kernel,
-                           kernel_params: cdict) -> jnp.ndarray:
+                           kernel_params: cdict,
+                           batch_inds_mat: jnp.ndarray) -> jnp.ndarray:
     n = vals.shape[0]
 
     def phi_hat_func(x_i):
         return vmap(lambda x_j: -kernel._call(vals[x_j], vals[x_i], **kernel_params)
                                 * grads[x_j]
-                                + kernel._grad_x(vals[x_j], vals[x_i], **kernel_params))(jnp.arange(n)).mean(axis=0)
+                                + kernel._grad_x(vals[x_j], vals[x_i], **kernel_params)
+                    )(batch_inds_mat[x_i]).mean(axis=0)
 
     phi_hat = vmap(phi_hat_func)(jnp.arange(n))
     return phi_hat
@@ -43,12 +45,14 @@ class SVGD(TransportSampler):
     opt_init: Callable
     opt_update: Callable
     get_params: Callable
+    get_batch_inds: Callable
 
     def __init__(self,
                  stepsize: Union[float, Callable],
                  max_iter: int = 1000,
                  kernel: Kernel = None,
                  kernel_params: cdict = None,
+                 ensemble_batchsize: int = None,
                  optimiser: Callable = adagrad,
                  **optim_params):
         super().__init__(max_iter=max_iter)
@@ -65,6 +69,8 @@ class SVGD(TransportSampler):
         self.kernel = kernel
         self.parameters.kernel_params = kernel_params
 
+        self.parameters.ensemble_batchsize = ensemble_batchsize
+
         self.optimiser = optimiser
         self.parameters.optim_params = optim_params
 
@@ -75,9 +81,17 @@ class SVGD(TransportSampler):
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
+        if self.parameters.ensemble_batchsize is None:
+            self.parameters.ensemble_batchsize = n
+
+        if self.parameters.ensemble_batchsize == n:
+            self.get_batch_inds = lambda _: jnp.repeat(jnp.arange(n)[None], n, axis=0)
+        else:
+            self.get_batch_inds = lambda rk: random.choice(rk, n, shape=(n, self.parameters.ensemble_batchsize,))
+
         initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
 
-        random_keys = random.split(initial_extra.random_key[0], 2*n)
+        random_keys = random.split(initial_extra.random_key[0], 2 * n)
         initial_extra.random_key = random_keys[:n]
 
         initial_state.potential, initial_state.grad_potential = vmap(scenario.potential_and_grad)(initial_state.value,
@@ -101,8 +115,9 @@ class SVGD(TransportSampler):
     def kernelised_grad_matrix(self,
                                vals: jnp.ndarray,
                                grads: jnp.ndarray,
-                               kernel_params: cdict) -> jnp.ndarray:
-        return kernelised_grad_matrix(vals, grads, self.kernel, kernel_params)
+                               kernel_params: cdict,
+                               batch_inds_mat: jnp.ndarray) -> jnp.ndarray:
+        return kernelised_grad_matrix(vals, grads, self.kernel, kernel_params, batch_inds_mat)
 
     def update(self,
                scenario: Scenario,
@@ -110,18 +125,23 @@ class SVGD(TransportSampler):
                ensemble_extra: cdict) -> Tuple[cdict, cdict]:
         n = ensemble_state.value.shape[0]
         ensemble_extra.iter = ensemble_extra.iter + 1
+
+        random_keys = random.split(ensemble_extra.random_key[0], 2 * n + 1)
+        batch_inds = self.get_batch_inds(random_keys[-1])
+
         phi_hat = self.kernelised_grad_matrix(ensemble_state.value,
                                               ensemble_state.grad_potential,
-                                              ensemble_extra.parameters.kernel_params)
+                                              ensemble_extra.parameters.kernel_params,
+                                              batch_inds)
 
         ensemble_extra.opt_state = self.opt_update(ensemble_extra.iter[0], -phi_hat, ensemble_extra.opt_state)
         ensemble_state.value = self.get_params(ensemble_extra.opt_state)
 
-        random_keys = random.split(ensemble_extra.random_key[0], 2*n)
+        random_keys = random.split(ensemble_extra.random_key[0], 2 * n + 1)
         ensemble_extra.random_key = random_keys[:n]
 
         ensemble_state.potential, ensemble_state.grad_potential \
-            = vmap(scenario.potential_and_grad)(ensemble_state.value, random_keys[n:])
+            = vmap(scenario.potential_and_grad)(ensemble_state.value, random_keys[n:(2*n)])
 
         ensemble_state, ensemble_extra = self.adapt(ensemble_state, ensemble_extra)
 

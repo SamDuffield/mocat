@@ -126,7 +126,7 @@ def run(scenario: Scenario,
 
     summary = sampler.summary(scenario, initial_state, initial_extra)
 
-    transport_kernel = jit(partial(sampler.update, scenario))
+    transport_kernel = partial(sampler.update, scenario)
 
     start = time()
     chain = while_loop_stacked(lambda state, extra: ~sampler.termination_criterion(state, extra),

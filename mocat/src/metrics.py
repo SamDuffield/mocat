@@ -13,7 +13,7 @@ from decorator import decorator
 from jax import vmap, random, numpy as jnp
 from jax.scipy.special import logsumexp
 import \
-    numpy as ojnp  # For ojnp.fft.fft(vals, n_samps=n_samps) and ojnp.unique(vals, axis=0) (JAX doesn't support as of writing)
+    numpy as np  # For np.fft.fft(vals, n_samps=n_samps) and np.unique(vals, axis=0) (JAX doesn't support as of writing)
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
@@ -40,7 +40,7 @@ def autocorrelation(sample: Union[jnp.ndarray, cdict],
     vals = extract_1d_vals(sample)
     max_lag_eval = min(max_lag_eval, len(vals))
     n = _next_pow_two(max_lag_eval)
-    f = ojnp.fft.fft(vals - jnp.mean(vals), n=2 * n)
+    f = np.fft.fft(vals - jnp.mean(vals), n=2 * n)
     acf = jnp.fft.ifft(f * jnp.conjugate(f))[:max_lag_eval].real
     return acf / acf[0]
 
@@ -91,7 +91,7 @@ def ksd(sample: Union[jnp.ndarray, cdict],
         kernel: Kernel,
         grad_potential: jnp.ndarray = None,
         log_weight: jnp.ndarray = None,
-        batchsize: int = None,
+        ensemble_batchsize: int = None,
         random_key: jnp.ndarray = None,
         **kernel_params) -> float:
     vals = sample.value if isinstance(sample, cdict) else sample
@@ -102,10 +102,10 @@ def ksd(sample: Union[jnp.ndarray, cdict],
     else:
         raise TypeError('grad_potential not found')
 
-    if batchsize is None:
+    if ensemble_batchsize is None:
         get_batch_inds = lambda _: jnp.arange(n)
     else:
-        random_inds = random.choice(random_key, n, shape=(n, batchsize))
+        random_inds = random.choice(random_key, n, shape=(n, ensemble_batchsize))
         get_batch_inds = lambda i: random_inds[i]
 
     if log_weight is not None:
