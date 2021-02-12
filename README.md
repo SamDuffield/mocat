@@ -96,11 +96,10 @@ class Underdamped(mocat.MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
         initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
