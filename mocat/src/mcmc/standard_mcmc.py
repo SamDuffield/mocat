@@ -31,11 +31,10 @@ class RandomWalk(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
         initial_state.potential = scenario.potential(initial_state.value, scen_key)
@@ -64,7 +63,7 @@ class RandomWalk(MCMCSampler):
                                reject_state: cdict, reject_extra: cdict,
                                proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
         return jnp.minimum(1., jnp.exp(- proposed_state.potential
-                                     + reject_state.potential))
+                                       + reject_state.potential))
 
 
 # Euler-Maruyama discretisation of Overdamped Langevin dynamics
@@ -82,11 +81,10 @@ class Overdamped(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
         initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
@@ -145,11 +143,10 @@ class HMC(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
         initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,
@@ -185,9 +182,9 @@ class HMC(MCMCSampler):
                                reject_state: cdict, reject_extra: cdict,
                                proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
         pre_min_alpha = jnp.exp(- proposed_state.potential
-                               + reject_state.potential
-                               - utils.gaussian_potential(proposed_state.momenta)
-                               + utils.gaussian_potential(reject_state.momenta))
+                                + reject_state.potential
+                                - utils.gaussian_potential(proposed_state.momenta)
+                                + utils.gaussian_potential(reject_state.momenta))
 
         return jnp.minimum(1., pre_min_alpha)
 
@@ -211,11 +208,10 @@ class Underdamped(MCMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_extra.random_key, scen_key = random.split(initial_extra.random_key)
         initial_state.potential, initial_state.grad_potential = scenario.potential_and_grad(initial_state.value,

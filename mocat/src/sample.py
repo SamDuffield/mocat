@@ -46,9 +46,8 @@ class Sampler:
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: Union[None, cdict],
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
         for key, value in kwargs.items():
             if hasattr(self, key):
@@ -61,8 +60,8 @@ class Sampler:
                     or (isinstance(self.max_iter, jnp.ndarray) and self.max_iter.dtype == 'int32')):
             raise AttributeError(self.__repr__() + ' max_iter must be int')
 
-        if initial_extra is None:
-            initial_extra = cdict(random_key=random_key, iter=0)
+        if not hasattr(initial_extra, 'iter'):
+            initial_extra.iter = 0
 
         if hasattr(self, 'parameters'):
             if not hasattr(initial_extra, 'parameters'):
@@ -121,7 +120,12 @@ def run(scenario: Scenario,
 
     sampler.n = n
 
-    initial_state, initial_extra = sampler.startup(scenario, n, random_key, initial_state, initial_extra,
+    if initial_extra is None:
+        initial_extra = cdict()
+    if random_key is not None:
+        initial_extra.random_key = random_key
+
+    initial_state, initial_extra = sampler.startup(scenario, n, initial_state, initial_extra,
                                                    **kwargs)
 
     summary = sampler.summary(scenario, initial_state, initial_extra)

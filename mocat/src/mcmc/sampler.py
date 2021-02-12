@@ -32,14 +32,13 @@ class MCMCSampler(Sampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 startup_correction: bool = True,
                 **kwargs) -> Tuple[cdict, cdict]:
         if initial_state is None:
             if is_implemented(scenario.prior_sample):
-                random_key, sub_key = random.split(random_key)
+                initial_extra.random_key, sub_key = random.split(initial_extra.random_key)
                 init_vals = scenario.prior_sample(sub_key)
             else:
                 init_vals = jnp.zeros(scenario.dim)
@@ -53,13 +52,10 @@ class MCMCSampler(Sampler):
 
         self.correction = check_correction(self.correction)
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
-
-        if not hasattr(initial_extra, 'iter'):
-            initial_extra.iter = 0
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         if startup_correction:
-            initial_state, initial_extra = self.correction.startup(scenario, self, n, random_key,
+            initial_state, initial_extra = self.correction.startup(scenario, self, n,
                                                                    initial_state, initial_extra, **kwargs)
 
         return initial_state, initial_extra
@@ -127,7 +123,6 @@ class Correction:
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:

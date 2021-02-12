@@ -77,9 +77,8 @@ class SVGD(TransportSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
         if self.parameters.ensemble_batchsize is None:
             self.parameters.ensemble_batchsize = n
@@ -89,7 +88,7 @@ class SVGD(TransportSampler):
         else:
             self.get_batch_inds = lambda rk: random.choice(rk, n, shape=(n, self.parameters.ensemble_batchsize,))
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         random_keys = random.split(initial_extra.random_key[0], 2 * n)
         initial_extra.random_key = random_keys[:n]
@@ -141,7 +140,7 @@ class SVGD(TransportSampler):
         ensemble_extra.random_key = random_keys[:n]
 
         ensemble_state.potential, ensemble_state.grad_potential \
-            = vmap(scenario.potential_and_grad)(ensemble_state.value, random_keys[n:(2*n)])
+            = vmap(scenario.potential_and_grad)(ensemble_state.value, random_keys[n:(2 * n)])
 
         ensemble_state, ensemble_extra = self.adapt(ensemble_state, ensemble_extra)
 

@@ -1,6 +1,6 @@
 ########################################################################################################################
 # Module: mcmc/metropolis.py
-# Description: Correction mechanisms for MCMC samplers.
+# Description: Accept/reject corrections for MCMC samplers.
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
@@ -20,13 +20,13 @@ def mh_acceptance_probability(sampler: MCMCSampler,
                               reject_state: cdict, reject_extra: cdict,
                               proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
     pre_min_alpha = jnp.exp(- proposed_state.potential
-                           + reject_state.potential
-                           - sampler.proposal_potential(scenario,
-                                                        proposed_state, proposed_extra,
-                                                        reject_state, reject_extra)
-                           + sampler.proposal_potential(scenario,
-                                                        reject_state, reject_extra,
-                                                        proposed_state, proposed_extra))
+                            + reject_state.potential
+                            - sampler.proposal_potential(scenario,
+                                                         proposed_state, proposed_extra,
+                                                         reject_state, reject_extra)
+                            + sampler.proposal_potential(scenario,
+                                                         reject_state, reject_extra,
+                                                         proposed_state, proposed_extra))
 
     return jnp.minimum(1., pre_min_alpha)
 
@@ -37,11 +37,10 @@ class Metropolis(Correction):
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, sampler, n,
                                                        initial_state, initial_extra, **kwargs)
         initial_state.alpha = 1.
         return initial_state, initial_extra
@@ -93,11 +92,10 @@ class RMMetropolis(Correction):
                 scenario: Scenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = super().startup(scenario, sampler, n,
                                                        initial_state, initial_extra, **kwargs)
         # Set tuning parameter (i.e. stepsize) to 2.38^2/d if not initiated and adaptive
         if hasattr(sampler.parameters, sampler.tuning.parameter) \
@@ -107,7 +105,7 @@ class RMMetropolis(Correction):
         setattr(initial_state, sampler.tuning.parameter, getattr(initial_extra.parameters,
                                                                  sampler.tuning.parameter))
 
-        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, n, random_key,
+        initial_state, initial_extra = self.super_correction.startup(scenario, sampler, n,
                                                                      initial_state, initial_extra, **kwargs)
 
         sampler.tuning.monotonicity = 1 if sampler.tuning.monotonicity in (1, 'increasing') else -1
@@ -161,4 +159,3 @@ class RMMetropolis(Correction):
                                                           monotonicity,
                                                           rm_stepsize)
         return jnp.exp(new_log_param)
-

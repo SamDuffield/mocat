@@ -10,7 +10,6 @@ from inspect import isclass
 
 from jax import numpy as jnp, random, vmap
 from jax.lax import scan, cond
-from jax.scipy.special import logsumexp
 
 from mocat.src.core import Scenario, cdict
 from mocat.src.transport.sampler import TransportSampler
@@ -110,12 +109,11 @@ class TemperedSMCSampler(SMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         random_keys = random.split(initial_extra.random_key[0], 3*n)
 
@@ -123,7 +121,8 @@ class TemperedSMCSampler(SMCSampler):
 
         n = len(initial_state.value)
         initial_state.prior_potential = vmap(scenario.prior_potential)(initial_state.value, random_keys[n:(2*n)])
-        initial_state.likelihood_potential = vmap(scenario.likelihood_potential)(initial_state.value, random_keys[(2*n):])
+        initial_state.likelihood_potential = vmap(scenario.likelihood_potential)(initial_state.value,
+                                                                                 random_keys[(2*n):])
         initial_state.potential = initial_state.prior_potential
         initial_state.temperature = jnp.zeros(n)
         initial_state.log_weight = jnp.zeros(n)
@@ -224,14 +223,13 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
     def startup(self,
                 scenario: Scenario,
                 n: int,
-                random_key: jnp.ndarray = None,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
 
         self.mcmc_sampler.correction = check_correction(self.mcmc_sampler.correction)
 
-        initial_state, initial_extra = super().startup(scenario, n, random_key, initial_state, initial_extra, **kwargs)
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         first_temp = self.next_temperature(initial_state, initial_extra)
         initial_state.temperature += first_temp
@@ -241,7 +239,6 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
         initial_state, initial_extra = vmap(
             lambda state, extra: self.mcmc_sampler.startup(scenario,
                                                            n,
-                                                           None,
                                                            state,
                                                            extra))(initial_state, initial_extra)
 
@@ -291,7 +288,6 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
 
         start_state, start_extra = self.mcmc_sampler.startup(scenario,
                                                              state.value.shape[0],
-                                                             None,
                                                              state,
                                                              extra)
 
