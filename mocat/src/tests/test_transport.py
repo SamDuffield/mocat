@@ -24,6 +24,7 @@ from mocat.src.mcmc.standard_mcmc import RandomWalk, Overdamped
 class TestCorrelatedGaussian(unittest.TestCase):
     scenario_cov = jnp.array([[1., 0.9], [0.9, 2.]])
     scenario = toy_examples.Gaussian(covariance=scenario_cov)
+    scenario.prior_sample = lambda rk: random.uniform(rk, shape=(2,)) * 3
     n = int(1e4)
 
     def _test_mean(self,
@@ -42,7 +43,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
         else:
             val = sample.value
         samp_cov = jnp.cov(val.T)
-        npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=1)
+        npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=0.5)
 
 
 class TestSVGD(TestCorrelatedGaussian):
@@ -144,7 +145,8 @@ class TestMetropolisedSMC(TestCorrelatedGaussian):
     def test_tempered_adaptive_RW(self):
         sample = run(self.scenario, MetropolisedSMCSampler(RandomWalk(stepsize=1.0)),
                      self.n,
-                     random_key=random.PRNGKey(0))
+                     random_key=random.PRNGKey(0),
+                     ess_threshold=0.9)
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)
@@ -152,7 +154,8 @@ class TestMetropolisedSMC(TestCorrelatedGaussian):
     def test_tempered_adaptive_OD(self):
         sample = run(self.scenario, MetropolisedSMCSampler(Overdamped(stepsize=1.0)),
                      self.n,
-                     random_key=random.PRNGKey(0))
+                     random_key=random.PRNGKey(0),
+                     ess_threshold=0.9)
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)

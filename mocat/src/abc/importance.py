@@ -31,19 +31,18 @@ class ImportanceABC(ABCSampler):
                    state: cdict,
                    extra: cdict):
         return jnp.where(state.distance < extra.parameters.threshold,
-                        -state.prior_potential + self.importance_potential(abc_scenario, state.value),
-                        -jnp.inf)
+                         -state.prior_potential + self.importance_potential(abc_scenario, state.value),
+                         -jnp.inf)
 
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 **kwargs) -> Tuple[cdict, cdict]:
         if initial_state is None:
             if is_implemented(abc_scenario.prior_sample):
-                random_key, sub_key = random.split(random_key)
+                initial_extra.random_key, sub_key = random.split(initial_extra.random_key)
                 init_vals = abc_scenario.prior_sample(sub_key)
             else:
                 init_vals = jnp.zeros(abc_scenario.dim)
@@ -51,11 +50,8 @@ class ImportanceABC(ABCSampler):
 
         self.max_iter = n
 
-        initial_state, initial_extra = super().startup(abc_scenario, n, random_key,
+        initial_state, initial_extra = super().startup(abc_scenario, n,
                                                        initial_state, initial_extra, **kwargs)
-
-        if not hasattr(initial_extra, 'iter'):
-            initial_extra.iter = 0
 
         initial_state.log_weight = self.log_weight(abc_scenario, initial_state, initial_extra)
         return initial_state, initial_extra
@@ -69,8 +65,8 @@ class ImportanceABC(ABCSampler):
         proposed_extra.random_key, subkey1, subkey2, subkey3 = random.split(reject_extra.random_key, 4)
         proposed_state.value = self.importance_proposal(abc_scenario, subkey1)
         proposed_state.prior_potential = abc_scenario.prior_potential(proposed_state.value, subkey2)
-        proposed_extra.simulated_data = abc_scenario.likelihood_sample(proposed_state.value, subkey3)
-        proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)
+        proposed_state.simulated_data = abc_scenario.likelihood_sample(proposed_state.value, subkey3)
+        proposed_state.distance = abc_scenario.distance_function(proposed_state.simulated_data)
         proposed_state.log_weight = self.log_weight(abc_scenario, proposed_state, proposed_extra)
         return proposed_state, proposed_extra
 
@@ -111,16 +107,15 @@ class VanillaABC(ImportanceABC):
                    state: cdict,
                    extra: cdict):
         return jnp.where(state.distance < extra.parameters.threshold,
-                        0.,
-                        -jnp.inf)
+                         0.,
+                         -jnp.inf)
 
     def clean_chain_ar(self,
-                       scenario: ABCScenario,
+                       abc_scenario: ABCScenario,
                        chain_state: cdict):
         threshold = jnp.quantile(chain_state.distance, self.parameters.acceptance_rate)
         self.parameters.threshold = float(threshold)
         chain_state.log_weight = jnp.where(chain_state.distance < threshold,
-                                          0.,
-                                          -jnp.inf)
+                                           0.,
+                                           -jnp.inf)
         return chain_state
-

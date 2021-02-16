@@ -41,23 +41,22 @@ class ABCSampler(Sampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                random_key: jnp.ndarray = None,
                 initial_state: cdict = None,
                 initial_extra: cdict = None,
                 startup_correction: bool = True,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(abc_scenario, n, random_key, initial_state, initial_extra,
+        initial_state, initial_extra = super().startup(abc_scenario, n, initial_state, initial_extra,
                                                        **kwargs)
 
         if not hasattr(initial_state, 'prior_potential') and is_implemented(abc_scenario.prior_potential):
             initial_extra.random_key, subkey = random.split(initial_extra.random_key)
-            initial_state.prior_potential = abc_scenario.prior_potential(initial_state.value, random_key)
+            initial_state.prior_potential = abc_scenario.prior_potential(initial_state.value, subkey)
 
         if not hasattr(initial_state, 'simulated_data'):
             initial_extra.random_key, subkey = random.split(initial_extra.random_key)
-            initial_extra.simulated_data = abc_scenario.likelihood_sample(initial_state.value, subkey)
+            initial_state.simulated_data = abc_scenario.likelihood_sample(initial_state.value, subkey)
 
         if not hasattr(initial_state, 'distance'):
-            initial_state.distance = abc_scenario.distance_function(initial_extra.simulated_data)
+            initial_state.distance = abc_scenario.distance_function(initial_state.simulated_data)
         return initial_state, initial_extra
 

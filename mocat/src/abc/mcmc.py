@@ -71,8 +71,8 @@ class RandomWalkABC(ABCMCMCSampler):
         proposed_extra.random_key, subkey1, subkey2, subkey3 = random.split(reject_extra.random_key, 4)
         proposed_state.value = reject_state.value + jnp.sqrt(stepsize) * random.normal(subkey1, (abc_scenario.dim,))
         proposed_state.prior_potential = abc_scenario.prior_potential(proposed_state.value, subkey2)
-        proposed_extra.simulated_data = abc_scenario.likelihood_sample(proposed_state.value, subkey3)
-        proposed_state.distance = abc_scenario.distance_function(proposed_extra.simulated_data)
+        proposed_state.simulated_data = abc_scenario.likelihood_sample(proposed_state.value, subkey3)
+        proposed_state.distance = abc_scenario.distance_function(proposed_state.simulated_data)
         return proposed_state, proposed_extra
 
 
@@ -82,11 +82,10 @@ class RMMetropolisDiagStepsize(RMMetropolis):
                 abc_scenario: ABCScenario,
                 sampler: MCMCSampler,
                 n: int,
-                random_key: jnp.ndarray,
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
-        initial_state, initial_extra = super().startup(abc_scenario, sampler, n, random_key,
+        initial_state, initial_extra = super().startup(abc_scenario, sampler, n,
                                                        initial_state, initial_extra, **kwargs)
         if sampler.parameters.stepsize is None:
             initial_extra.parameters.stepsize = 1.0

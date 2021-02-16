@@ -29,8 +29,8 @@ class TransportSampler(Sampler):
                 init_vals = random.normal(sub_key, shape=(n, scenario.dim))
             initial_state = cdict(value=init_vals)
 
-        initial_extra.random_key = random.split(initial_extra.random_key, n)
-        initial_extra.iter = jnp.zeros(n, dtype='int32')
+        # initial_extra.random_key = random.split(initial_extra.random_key, n)
+        # initial_extra.iter = jnp.zeros(n, dtype='int32')
 
         initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
@@ -39,7 +39,7 @@ class TransportSampler(Sampler):
     def update(self,
                scenario: Scenario,
                ensemble_state: cdict,
-               ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+               extra: cdict) -> Tuple[cdict, cdict]:
         raise NotImplementedError(f'{self.name} update not initiated')
 
     def clean_chain(self,
@@ -49,6 +49,6 @@ class TransportSampler(Sampler):
 
     def termination_criterion(self,
                               ensemble_state: cdict,
-                              ensemble_extra: cdict) -> bool:
-        return ensemble_extra.iter[0] >= self.max_iter
+                              extra: cdict) -> bool:
+        return extra.iter >= self.max_iter
 

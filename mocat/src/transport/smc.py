@@ -21,63 +21,73 @@ from mocat.src.metrics import log_ess_log_weight
 class SMCSampler(TransportSampler):
     name = 'SMC Sampler'
 
+    def startup(self,
+                scenario: Scenario,
+                n: int,
+                initial_state: cdict,
+                initial_extra: cdict,
+                **kwargs) -> Tuple[cdict, cdict]:
+        initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
+        if not hasattr(initial_state, 'log_weight'):
+            initial_state.log_weight = jnp.zeros(n)
+        return initial_state, initial_extra
+
     def forward_proposal(self,
                          scenario: Scenario,
                          previous_state: cdict,
-                         previous_extra: cdict) -> Tuple[cdict, cdict]:
+                         previous_extra: cdict,
+                         random_key: jnp.ndarray) -> cdict:
         raise AttributeError(f'{self.name} forward_proposal not initiated')
 
     def adapt(self,
-              ensemble_state: cdict,
-              ensemble_extra: cdict) -> Tuple[cdict, cdict]:
-        return ensemble_state, ensemble_extra
+              previous_ensemble_state: cdict,
+              previous_extra: cdict,
+              new_ensemble_state: cdict,
+              new_extra: cdict) -> Tuple[cdict, cdict]:
+        new_ensemble_state.log_weight = previous_ensemble_state.log_weight + new_ensemble_state.log_weight
+        return new_ensemble_state, new_extra
 
     def resample_criterion(self,
                            ensemble_state: cdict,
-                           ensemble_extra: cdict) -> bool:
+                           extra: cdict) -> bool:
         return True
 
     def resample(self,
                  ensemble_state: cdict,
-                 ensemble_extra: cdict) -> Tuple[cdict, cdict]:
+                 random_key: jnp.ndarray) -> cdict:
         n = ensemble_state.value.shape[0]
-        resampled_indices = random.categorical(ensemble_extra.random_key[0],
+        resampled_indices = random.categorical(random_key,
                                                ensemble_state.log_weight,
                                                shape=(n,))
         resampled_ensemble_state = ensemble_state[resampled_indices]
-        resampled_ensemble_extra = ensemble_extra[resampled_indices]
         resampled_ensemble_state.log_weight = jnp.zeros(n)
-        return resampled_ensemble_state, resampled_ensemble_extra
-
-    def log_weight(self,
-                   previous_ensemble_state: cdict,
-                   previous_ensemble_extra: cdict,
-                   new_ensemble_state: cdict,
-                   new_ensemble_extra: cdict) -> jnp.ndarray:
-        return previous_ensemble_state.log_weight + new_ensemble_state.log_weight
+        return resampled_ensemble_state
 
     def update(self,
                scenario: Scenario,
                ensemble_state: cdict,
-               ensemble_extra: cdict) -> Tuple[cdict, cdict]:
-        ensemble_extra.iter = ensemble_extra.iter + 1
+               extra: cdict) -> Tuple[cdict, cdict]:
+        extra.iter = extra.iter + 1
+        n = ensemble_state.value.shape[0]
 
-        resample_bool = self.resample_criterion(ensemble_state, ensemble_extra)
+        resample_bool = self.resample_criterion(ensemble_state, extra)
 
-        resampled_ensemble_state, resampled_ensemble_extra \
+        random_keys_all = random.split(extra.random_key, n + 2)
+        extra.random_key = random_keys_all[-1]
+
+        resampled_ensemble_state \
             = cond(resample_bool,
-                   lambda tup: self.resample(*tup),
-                   lambda tup: tup,
-                   (ensemble_state, ensemble_extra))
+                   lambda state: self.resample(state, random_keys_all[-2]),
+                   lambda state: state,
+                   ensemble_state)
 
-        advanced_state, advanced_extra = vmap(self.forward_proposal, in_axes=(None, 0, 0))(scenario,
-                                                                                           resampled_ensemble_state,
-                                                                                           resampled_ensemble_extra)
-
-        advanced_state.log_weight = self.log_weight(resampled_ensemble_state, resampled_ensemble_extra,
-                                                    advanced_state, advanced_extra)
-
-        advanced_state, advanced_extra = self.adapt(advanced_state, advanced_extra)
+        advanced_state = vmap(self.forward_proposal,
+                              in_axes=(None, 0, None, 0))(scenario,
+                                                          resampled_ensemble_state,
+                                                          extra,
+                                                          random_keys_all[:n])
+        advanced_state, advanced_extra = self.adapt(resampled_ensemble_state, extra,
+                                                    advanced_state, extra)
 
         return advanced_state, advanced_extra
 
@@ -102,7 +112,7 @@ class TemperedSMCSampler(SMCSampler):
                 self.next_temperature = self.next_temperature_adaptive
                 self.max_iter = int(1e4)
             else:
-                self.next_temperature = lambda state, extra: self.temperature_schedule[extra.iter[0]]
+                self.next_temperature = lambda state, extra: self.temperature_schedule[extra.iter]
                 self.max_temperature = value[-1]
                 self.max_iter = len(value)
 
@@ -112,37 +122,35 @@ class TemperedSMCSampler(SMCSampler):
                 initial_state: cdict,
                 initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
+        if not hasattr(scenario, 'prior_sample'):
+            raise TypeError(f'Likelihood tempering requires scenario {scenario.name} to have prior_sample implemented')
 
         initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
-        random_keys = random.split(initial_extra.random_key[0], 3*n)
+        random_keys = random.split(initial_extra.random_key, 2 * n + 1)
 
-        initial_extra.random_key = random_keys[:n]
-
-        n = len(initial_state.value)
-        initial_state.prior_potential = vmap(scenario.prior_potential)(initial_state.value, random_keys[n:(2*n)])
+        initial_extra.random_key = random_keys[-1]
+        initial_state.prior_potential = vmap(scenario.prior_potential)(initial_state.value, random_keys[:n])
         initial_state.likelihood_potential = vmap(scenario.likelihood_potential)(initial_state.value,
-                                                                                 random_keys[(2*n):])
+                                                                                 random_keys[n:(2 * n)])
         initial_state.potential = initial_state.prior_potential
         initial_state.temperature = jnp.zeros(n)
         initial_state.log_weight = jnp.zeros(n)
 
         scenario.temperature = 0.
 
-        initial_extra.parameters = vmap(lambda _: initial_extra.parameters)(jnp.arange(n))
-
         return initial_state, initial_extra
 
     def next_temperature_adaptive(self,
                                   ensemble_state: cdict,
-                                  ensemble_extra: cdict) -> float:
+                                  extra: cdict) -> float:
         raise AttributeError(f'{self.name} next_temperature_adaptive not initiated')
 
     def termination_criterion(self,
                               ensemble_state: cdict,
-                              ensemble_extra: cdict) -> bool:
+                              extra: cdict) -> bool:
         return jnp.logical_or(ensemble_state.temperature[0] >= self.max_temperature,
-                             ensemble_extra.iter[0] >= self.max_iter)
+                              extra.iter >= self.max_iter)
 
     def clean_chain(self,
                     scenario: Scenario,
@@ -151,35 +159,32 @@ class TemperedSMCSampler(SMCSampler):
         scenario.temperature = float(chain_ensemble_state.temperature[-1])
         return chain_ensemble_state
 
+    def log_weight(self,
+                   previous_ensemble_state: cdict,
+                   previous_extra: cdict,
+                   new_ensemble_state: cdict,
+                   new_extra: cdict) -> Union[float, jnp.ndarray]:
+        return 0.
+
+    def adapt(self,
+              previous_ensemble_state: cdict,
+              previous_extra: cdict,
+              new_ensemble_state: cdict,
+              new_extra: cdict) -> Tuple[cdict, cdict]:
+        n = new_ensemble_state.value.shape[0]
+        next_temperature = self.next_temperature(new_ensemble_state, new_extra)
+        new_ensemble_state.temperature = jnp.ones(n) * next_temperature
+        new_ensemble_state.log_weight = previous_ensemble_state.log_weight \
+                                        + self.log_weight(previous_ensemble_state, previous_extra,
+                                                          new_ensemble_state, new_extra)
+        return new_ensemble_state, new_extra
+
     def update(self,
                scenario: Scenario,
                ensemble_state: cdict,
-               ensemble_extra: cdict) -> Tuple[cdict, cdict]:
-        n = ensemble_state.value.shape[0]
-        ensemble_extra.iter = ensemble_extra.iter + 1
-        prev_temperature = ensemble_state.temperature[0]
-        scenario.temperature = prev_temperature
-
-        resample_bool = self.resample_criterion(ensemble_state, ensemble_extra)
-        ensemble_state.log_weight = jnp.where(resample_bool, 0., ensemble_state.log_weight)
-
-        resampled_ensemble_state, resampled_ensemble_extra \
-            = cond(resample_bool,
-                   lambda tup: self.resample(*tup),
-                   lambda tup: tup,
-                   (ensemble_state, ensemble_extra))
-
-        advanced_state, advanced_extra = vmap(self.forward_proposal, in_axes=(None, 0, 0))(scenario,
-                                                                                           resampled_ensemble_state,
-                                                                                           resampled_ensemble_extra)
-
-        advanced_extra.iter = ensemble_extra.iter
-        next_temperature = self.next_temperature(advanced_state, advanced_extra)
-        advanced_state.temperature = jnp.ones(n) * next_temperature
-        advanced_state.log_weight = self.log_weight(ensemble_state, ensemble_extra, advanced_state, advanced_extra)
-
-        advanced_state, advanced_extra = self.adapt(advanced_state, advanced_extra)
-
+               extra: cdict) -> Tuple[cdict, cdict]:
+        scenario.temperature = ensemble_state.temperature[0]
+        advanced_state, advanced_extra = super().update(scenario, ensemble_state, extra)
         return advanced_state, advanced_extra
 
 
@@ -232,16 +237,17 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
         initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
 
         first_temp = self.next_temperature(initial_state, initial_extra)
+        scenario.temperature = first_temp
         initial_state.temperature += first_temp
         initial_state.potential = initial_state.prior_potential + first_temp * initial_state.likelihood_potential
         initial_state.log_weight = - first_temp * initial_state.likelihood_potential
 
         initial_state, initial_extra = vmap(
-            lambda state, extra: self.mcmc_sampler.startup(scenario,
-                                                           n,
-                                                           state,
-                                                           extra))(initial_state, initial_extra)
-
+            lambda state: self.mcmc_sampler.startup(scenario,
+                                                    n,
+                                                    state,
+                                                    initial_extra))(initial_state)
+        initial_extra = initial_extra[0]
         return initial_state, initial_extra
 
     @staticmethod
@@ -253,7 +259,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
 
     def next_temperature_adaptive(self,
                                   ensemble_state: cdict,
-                                  ensemble_extra: cdict) -> float:
+                                  extra: cdict) -> float:
         temperature_bounds = jnp.array([ensemble_state.temperature[0], self.max_temperature])
         likelihood_potential = ensemble_state.likelihood_potential
         log_n_samp_threshold = jnp.log(len(likelihood_potential) * self.parameters.ess_threshold)
@@ -279,15 +285,18 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
     def forward_proposal(self,
                          scenario: Scenario,
                          state: cdict,
-                         extra: cdict) -> Tuple[cdict, cdict]:
+                         extra: cdict,
+                         random_key: jnp.ndarray) -> cdict:
 
         def mcmc_kernel(previous_carry: Tuple[cdict, cdict],
                         _: None) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict]]:
             new_carry = self.mcmc_sampler.update(scenario, *previous_carry)
             return new_carry, new_carry
 
+        extra.random_key = random_key
+
         start_state, start_extra = self.mcmc_sampler.startup(scenario,
-                                                             state.value.shape[0],
+                                                             extra.parameters.mcmc_steps,
                                                              state,
                                                              extra)
 
@@ -298,18 +307,15 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
 
         advanced_state, advanced_extra = self.clean_mcmc_chain(chain[0], chain[1])
 
-        advanced_extra.random_key, subkey = random.split(advanced_extra.random_key)
-
-        advanced_state.prior_potential = scenario.prior_potential(advanced_state.value, subkey)
+        advanced_state.prior_potential = scenario.prior_potential(advanced_state.value, advanced_extra.random_key)
         advanced_state.likelihood_potential = (advanced_state.potential - advanced_state.prior_potential) \
                                               / scenario.temperature
-        advanced_extra.iter = extra.iter
-        return advanced_state, advanced_extra
+        return advanced_state
 
     def log_weight(self,
                    previous_ensemble_state: cdict,
-                   previous_ensemble_extra: cdict,
+                   previous_extra: cdict,
                    new_ensemble_state: cdict,
-                   new_ensemble_extra: cdict) -> jnp.ndarray:
+                   new_extra: cdict) -> jnp.ndarray:
         return - (new_ensemble_state.temperature[0] - previous_ensemble_state.temperature[0]) \
                * new_ensemble_state.likelihood_potential

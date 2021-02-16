@@ -139,7 +139,7 @@ def leapfrog(potential_and_grad: Callable,
 def _while_loop_stacked(cond_fun: Callable,
                         body_fun: Callable,
                         init_carry: Tuple[Any, Any],
-                        max_iter: int) -> Tuple[Any, int]:
+                        max_iter: int) -> Tuple[Any, Tuple[Any, Any], int]:
     # init_carry = (init_state, extra)
     # cond_func: (state, extra) -> bool
     # body_func: (state, extra) -> (state, extra)
@@ -169,15 +169,15 @@ def _while_loop_stacked(cond_fun: Callable,
         return (new_val, final_iter), new_val[0]
 
     final_val_and_final_iter, stack = scan(update_kernel, (init_carry, 0), jnp.arange(1, max_iter + 1))
-    _, final_final_iter = final_val_and_final_iter
-    return stack, final_final_iter
+    final_val, final_final_iter = final_val_and_final_iter
+    return stack, final_val, final_final_iter
 
 
 def while_loop_stacked(cond_fun: Callable,
                        body_fun: Callable,
                        init_carry: Tuple[Any, Any],
                        max_iter: int = 1000) -> Any:
-    full_stack, final_int = _while_loop_stacked(cond_fun, body_fun, init_carry, max_iter)
+    full_stack, final_carry, final_int = _while_loop_stacked(cond_fun, body_fun, init_carry, max_iter)
     return tuple(a[:final_int] for a in full_stack) if isinstance(full_stack, tuple) else full_stack[:final_int]
 
 
