@@ -4,6 +4,7 @@
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
+
 from typing import Union, Tuple
 
 from jax import numpy as jnp, random
@@ -16,8 +17,9 @@ class ABCScenario(Scenario):
 
     def __init__(self,
                  name: str = None,
+                 init_grad: bool = False,
                  **kwargs):
-        super().__init__(name, init_grad=False, **kwargs)
+        super().__init__(name, init_grad=init_grad, **kwargs)
 
     @impl_checkable
     def potential(self,

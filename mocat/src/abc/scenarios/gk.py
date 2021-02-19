@@ -17,7 +17,7 @@ buffer = 1e-5
 
 
 class _GK(ABCScenario):
-    unsummarised_data: jnp.ndarray
+    n_unsummarised_data: int = None
 
     def single_likelihood_sample(self,
                                  x: jnp.ndarray,
@@ -27,7 +27,7 @@ class _GK(ABCScenario):
     def full_data_sample(self,
                          x: jnp.ndarray,
                          random_key: jnp.ndarray) -> jnp.ndarray:
-        data_keys = random.split(random_key, self.unsummarised_data.shape[0])
+        data_keys = random.split(random_key, self.n_unsummarised_data)
         return vmap(self.single_likelihood_sample, (None, 0))(x, data_keys)
 
     def summarise_data(self,
@@ -60,7 +60,8 @@ class GKUniformPrior(_GK, AbsBaseClass):
                * z * (1 + z ** 2) ** x[3]
 
     def prior_potential(self,
-                        x: jnp.ndarray) -> Union[float, jnp.ndarray]:
+                        x: jnp.ndarray,
+                        random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
         out = jnp.where(jnp.all(x > self.prior_mins), 1., jnp.inf)
         out = jnp.where(jnp.all(x < self.prior_maxs), out, jnp.inf)
         return out
@@ -99,7 +100,8 @@ class GKTransformedUniformPrior(_GK, AbsBaseClass):
                * z * (1 + z ** 2) ** transformed_x[3]
 
     def prior_potential(self,
-                        x: jnp.ndarray) -> Union[float, jnp.ndarray]:
+                        x: jnp.ndarray,
+                        random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
         return 0.5 * (x ** 2).sum()
 
     def prior_sample(self,
@@ -130,7 +132,8 @@ class GKOnlyAUniformPrior(_GK, AbsBaseClass):
                * z * (1 + z ** 2) ** self.c
 
     def prior_potential(self,
-                        x: jnp.ndarray) -> Union[float, jnp.ndarray]:
+                        x: jnp.ndarray,
+                        random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
         out = jnp.where(jnp.all(x > self.prior_mins), 1., jnp.inf)
         out = jnp.where(jnp.all(x < self.prior_maxs), out, jnp.inf)
         return out
@@ -172,7 +175,8 @@ class GKOnlyATransformedUniformPrior(_GK, AbsBaseClass):
                * z * (1 + z ** 2) ** self.c
 
     def prior_potential(self,
-                        x: jnp.ndarray) -> Union[float, jnp.ndarray]:
+                        x: jnp.ndarray,
+                        random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
         return 0.5 * (x ** 2).sum()
 
     def prior_sample(self,

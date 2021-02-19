@@ -28,7 +28,7 @@ def _vectorised_gaussian_potential(x: jnp.ndarray,
                                    mean: Union[float, jnp.ndarray],
                                    sqrt_prec: jnp.ndarray) -> Union[float, jnp.ndarray]:
     diff = x - mean
-    return 0.5 * jnp.sum(jnp.square(diff @ sqrt_prec), axis=-1)
+    return 0.5 * jnp.square(diff @ sqrt_prec).sum(axis=-1)
 
 
 @jit
