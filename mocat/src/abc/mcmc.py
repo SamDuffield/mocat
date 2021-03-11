@@ -58,8 +58,8 @@ class RandomWalkABC(ABCMCMCSampler):
                                reject_state: cdict, reject_extra: cdict,
                                proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
         return jnp.minimum(1., jnp.exp(-proposed_state.prior_potential
-                                     + reject_state.prior_potential)
-                          * (proposed_state.distance < reject_extra.parameters.threshold))
+                                       + reject_state.prior_potential)
+                           * (proposed_state.distance < reject_extra.parameters.threshold))
 
     def proposal(self,
                  abc_scenario: ABCScenario,

@@ -1,6 +1,6 @@
 ########################################################################################################################
-# Module: ssm/linear_gaussian.py
-# Description: Linear TemporalGaussian state-space models plus Kalman filtering/smoothing
+# Module: ssm/linear_gaussian/linear_gaussian.py
+# Description: Linear TemporalGaussian state-space models
 #
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################

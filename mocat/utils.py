@@ -10,6 +10,7 @@ from mocat.src.utils import extract_dimension
 from mocat.src.utils import reset_covariance
 from mocat.src.utils import bfgs_update
 from mocat.src.utils import bfgs
+from mocat.src.utils import gc_matrix
 
 from mocat.src.core import impl_checkable
 from mocat.src.core import is_implemented

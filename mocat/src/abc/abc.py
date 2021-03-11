@@ -43,8 +43,8 @@ class ABCSampler(Sampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 startup_correction: bool = True,
                 **kwargs) -> Tuple[cdict, cdict]:
         initial_state, initial_extra = super().startup(abc_scenario, n, initial_state, initial_extra,

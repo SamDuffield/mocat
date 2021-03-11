@@ -48,7 +48,7 @@ class ImportanceABC(ABCSampler):
                 init_vals = jnp.zeros(abc_scenario.dim)
             initial_state = cdict(value=init_vals)
 
-        self.max_iter = n
+        self.max_iter = n - 1
 
         initial_state, initial_extra = super().startup(abc_scenario, n,
                                                        initial_state, initial_extra, **kwargs)

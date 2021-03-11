@@ -42,8 +42,8 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
 
         initial_state, initial_extra = SMCSampler.startup(self, abc_scenario, n,
@@ -97,10 +97,12 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
     def __init__(self,
                  mcmc_sampler: Union[ABCMCMCSampler, Type[ABCMCMCSampler]] = None,
                  mcmc_correction: Union[Correction, Type[Correction], str] = 'sampler_default',
-                 mcmc_steps: int = 20,
+                 mcmc_steps: int = 1,
                  threshold_schedule: Union[None, jnp.ndarray] = None,
                  max_iter: int = int(1e4),
-                 threshold_quantile_retain: float = 0.75,
+                 ess_threshold_retain: float = 0.9,
+                 ess_threshold_resample: float = 0.5,
+                 termination_alpha: float = 0.01,
                  **kwargs):
         super().__init__(max_iter=max_iter, threshold_schedule=threshold_schedule, **kwargs)
         if mcmc_sampler is None:
@@ -113,13 +115,15 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
         if mcmc_correction != 'sampler_default':
             self.mcmc_sampler.correction = mcmc_correction
         self.parameters.mcmc_steps = mcmc_steps
-        self.parameters.threshold_quantile_retain = threshold_quantile_retain
+        self.parameters.ess_threshold_retain = ess_threshold_retain
+        self.parameters.ess_threshold_resample = ess_threshold_resample
+        self.parameters.termination_alpha = termination_alpha
 
     def startup(self,
                 abc_scenario: ABCScenario,
                 n: int,
-                initial_state: cdict = None,
-                initial_extra: cdict = None,
+                initial_state: cdict,
+                initial_extra: cdict,
                 **kwargs) -> Tuple[cdict, cdict]:
 
         self.mcmc_sampler.correction = check_correction(self.mcmc_sampler.correction)
@@ -139,23 +143,29 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
                                                   initial_state, initial_extra)
         return initial_state, initial_extra
 
+    def resample_criterion(self,
+                           ensemble_state: cdict,
+                           extra: cdict) -> bool:
+        return (ensemble_state.distance < extra.parameters.threshold).mean()\
+               < extra.parameters.ess_threshold_resample
+
     def termination_criterion(self,
                               ensemble_state: cdict,
                               extra: cdict) -> bool:
-        return jnp.logical_or(ensemble_state.alpha.mean() <= 0.01,
+        return jnp.logical_or(ensemble_state.alpha.mean() <= extra.parameters.termination_alpha,
                               extra.iter >= self.max_iter)
 
     def next_threshold_adaptive(self,
                                 state: cdict,
                                 extra: cdict) -> float:
-        return jnp.quantile(state.distance, extra.parameters.threshold_quantile_retain)
+        return jnp.quantile(state.distance, extra.parameters.ess_threshold_retain)
 
     def log_weight(self,
                    previous_ensemble_state: cdict,
                    previous_extra: cdict,
                    new_ensemble_state: cdict,
                    new_extra: cdict) -> jnp.ndarray:
-        return jnp.where(new_ensemble_state.distance < new_extra.parameters.threshold, 0., -jnp.inf)
+        return jnp.where(new_ensemble_state.distance > new_extra.parameters.threshold, -jnp.inf, 0.)
 
     def clean_mcmc_chain(self,
                          chain_state: cdict,

@@ -50,7 +50,8 @@ class cdict:
 
         out_cdict = self.copy()
         for key, attr in out_cdict.__dict__.items():
-            if isinstance(attr, jnp.ndarray) or (isinstance(attr, cdict) and not isinstance(attr, static_cdict)):
+            if (isinstance(attr, jnp.ndarray) and attr.ndim > 0)\
+                    or (isinstance(attr, cdict) and not isinstance(attr, static_cdict)):
                 out_cdict.__setattr__(key, attr[item])
         return out_cdict
 
@@ -64,7 +65,7 @@ class cdict:
                 attr_atl = attr
                 other_attr_atl = other.__dict__[key]
                 out_cdict.__setattr__(key, jnp.append(jnp.atleast_1d(attr_atl),
-                                                     jnp.atleast_1d(other_attr_atl), axis=0))
+                                                      jnp.atleast_1d(other_attr_atl), axis=0))
         if hasattr(self, 'time') and hasattr(other, 'time'):
             out_cdict.time = self.time + other.time
         return out_cdict

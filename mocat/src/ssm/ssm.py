@@ -160,5 +160,5 @@ class StateSpaceModel:
 
         y = vmap(self.likelihood_sample)(x_all, t_all, obs_keys)
 
-        out_cdict = cdict(x=x_all, y=y, t=t_all, name=f'{self.name} run')
+        out_cdict = cdict(x=x_all, y=y, t=t_all, name=f'{self.name} simulation')
         return out_cdict
