@@ -13,22 +13,23 @@ from jax.scipy.stats import norm
 
 from mocat.src.abc.abc import ABCScenario
 
-buffer = 1e-5
-
 
 class _GK(ABCScenario):
+    name: str = 'GK'
     n_unsummarised_data: int = None
+    dim: int = 4
 
-    def single_likelihood_sample(self,
-                                 x: jnp.ndarray,
-                                 random_key: jnp.ndarray) -> jnp.ndarray:
-        raise NotImplementedError(f'{self.name} single_likelihood_sample not implemented')
+    c: float = 0.8
+
+    prior_mins: float = 0
+    prior_maxs: float = 10
+
+    buffer: float = 1e-5
 
     def full_data_sample(self,
                          x: jnp.ndarray,
                          random_key: jnp.ndarray) -> jnp.ndarray:
-        data_keys = random.split(random_key, self.n_unsummarised_data)
-        return vmap(self.single_likelihood_sample, (None, 0))(x, data_keys)
+        raise NotImplementedError(f'{self.name} full_data_sample not implemented')
 
     def summarise_data(self,
                        data: jnp.ndarray) -> jnp.ndarray:
@@ -41,18 +42,11 @@ class _GK(ABCScenario):
 
 
 class GKUniformPrior(_GK, AbsBaseClass):
-    name = 'GK_old'
-    dim = 4
 
-    c = 0.8
-
-    prior_mins = 0
-    prior_maxs = 10
-
-    def single_likelihood_sample(self,
-                                 x: jnp.ndarray,
-                                 random_key: jnp.ndarray) -> jnp.ndarray:
-        u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
+    def full_data_sample(self,
+                         x: jnp.ndarray,
+                         random_key: jnp.ndarray) -> jnp.ndarray:
+        u = random.uniform(random_key, shape=(self.n_unsummarised_data,), minval=self.buffer, maxval=1 - self.buffer)
         z = norm.ppf(u)
         expmingz = jnp.exp(-x[2] * z)
         return x[0] \
@@ -72,13 +66,6 @@ class GKUniformPrior(_GK, AbsBaseClass):
 
 
 class GKTransformedUniformPrior(_GK, AbsBaseClass):
-    name = 'GK_old'
-    dim = 4
-
-    c = 0.8
-
-    prior_mins = 0
-    prior_maxs = 10
 
     def constrain(self,
                   unconstrained_x: jnp.ndarray):
@@ -88,11 +75,11 @@ class GKTransformedUniformPrior(_GK, AbsBaseClass):
                     constrained_x: jnp.ndarray):
         return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
 
-    def single_likelihood_sample(self,
-                                 x: jnp.ndarray,
-                                 random_key: jnp.ndarray) -> jnp.ndarray:
+    def full_data_sample(self,
+                         x: jnp.ndarray,
+                         random_key: jnp.ndarray) -> jnp.ndarray:
         transformed_x = self.constrain(x)
-        u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
+        u = random.uniform(random_key, shape=(self.n_unsummarised_data,), minval=self.buffer, maxval=1 - self.buffer)
         z = norm.ppf(u)
         expmingz = jnp.exp(-transformed_x[2] * z)
         return transformed_x[0] \
@@ -110,21 +97,17 @@ class GKTransformedUniformPrior(_GK, AbsBaseClass):
 
 
 class GKOnlyAUniformPrior(_GK, AbsBaseClass):
-    name = 'GK_old only A'
-    dim = 1
+    name: str = 'GK only A'
+    dim: int = 1
 
-    B = 1.
-    g = 2.
-    k = 0.5
-    c = 0.8
+    B: float = 1.
+    g: float = 2.
+    k: float = 0.5
 
-    prior_mins = 0
-    prior_maxs = 10
-
-    def single_likelihood_sample(self,
-                                 x: jnp.ndarray,
-                                 random_key: jnp.ndarray) -> jnp.ndarray:
-        u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
+    def full_data_sample(self,
+                         x: jnp.ndarray,
+                         random_key: jnp.ndarray) -> jnp.ndarray:
+        u = random.uniform(random_key, shape=(self.n_unsummarised_data,), minval=self.buffer, maxval=1 - self.buffer)
         z = norm.ppf(u)
         expmingz = jnp.exp(-self.g * z)
         return x[0] \
@@ -144,16 +127,12 @@ class GKOnlyAUniformPrior(_GK, AbsBaseClass):
 
 
 class GKOnlyATransformedUniformPrior(_GK, AbsBaseClass):
-    name = 'GK_old only A'
-    dim = 1
+    name: str = 'GK only A'
+    dim: int = 1
 
-    B = 1.
-    g = 2.
-    k = 0.5
-    c = 0.8
-
-    prior_mins = 0
-    prior_maxs = 10
+    B: float = 1.
+    g: float = 2.
+    k: float = 0.5
 
     def constrain(self,
                   unconstrained_x: jnp.ndarray):
@@ -163,11 +142,11 @@ class GKOnlyATransformedUniformPrior(_GK, AbsBaseClass):
                     constrained_x: jnp.ndarray):
         return norm.ppf((constrained_x - self.prior_mins) / (self.prior_maxs - self.prior_mins))
 
-    def single_likelihood_sample(self,
-                                 x: jnp.ndarray,
-                                 random_key: jnp.ndarray) -> jnp.ndarray:
+    def full_data_sample(self,
+                         x: jnp.ndarray,
+                         random_key: jnp.ndarray) -> jnp.ndarray:
         transformed_x = self.constrain(x)
-        u = random.uniform(random_key, minval=buffer, maxval=1 - buffer)
+        u = random.uniform(random_key, shape=(self.n_unsummarised_data,), minval=self.buffer, maxval=1 - self.buffer)
         z = norm.ppf(u)
         expmingz = jnp.exp(-self.g * z)
         return transformed_x[0] \

@@ -21,13 +21,12 @@ def lorenz96_dynamics(x: jnp.ndarray,
 
 @jit
 def lorenz96_integrator(x: jnp.ndarray,
-                         delta_t: float,
-                         forcing_constant: float) -> jnp.ndarray:
+                        delta_t: float,
+                        forcing_constant: float) -> jnp.ndarray:
     return odeint(lorenz96_dynamics, x, jnp.array([0, delta_t]), forcing_constant)[-1]
 
 
 class Lorenz96(NonLinearGaussian):
-
     name = 'Lorenz 96'
 
     def __init__(self,
@@ -43,5 +42,3 @@ class Lorenz96(NonLinearGaussian):
                             t_previous: float,
                             t_new: float) -> jnp.ndarray:
         return lorenz96_integrator(x_previous, t_new - t_previous, self.forcing_constant)
-
-

@@ -30,6 +30,8 @@ class SMCSampler(TransportSampler):
         initial_state, initial_extra = super().startup(scenario, n, initial_state, initial_extra, **kwargs)
         if not hasattr(initial_state, 'log_weight'):
             initial_state.log_weight = jnp.zeros(n)
+        if not hasattr(initial_state, 'ess'):
+            initial_state.ess = jnp.zeros(n) + n
         return initial_state, initial_extra
 
     def forward_proposal(self,
@@ -61,6 +63,7 @@ class SMCSampler(TransportSampler):
                                                shape=(n,))
         resampled_ensemble_state = ensemble_state[resampled_indices]
         resampled_ensemble_state.log_weight = jnp.zeros(n)
+        resampled_ensemble_state.ess = jnp.zeros(n) + n
         return resampled_ensemble_state
 
     def update(self,
@@ -136,6 +139,7 @@ class TemperedSMCSampler(SMCSampler):
         initial_state.potential = initial_state.prior_potential
         initial_state.temperature = jnp.zeros(n)
         initial_state.log_weight = jnp.zeros(n)
+        initial_state.ess = jnp.zeros(n) + n
 
         scenario.temperature = 0.
 
@@ -157,6 +161,7 @@ class TemperedSMCSampler(SMCSampler):
                     chain_ensemble_state: cdict) -> cdict:
         chain_ensemble_state.temperature = chain_ensemble_state.temperature[:, 0]
         scenario.temperature = float(chain_ensemble_state.temperature[-1])
+        chain_ensemble_state.ess = chain_ensemble_state.ess[:, 0]
         return chain_ensemble_state
 
     def log_weight(self,
@@ -177,6 +182,7 @@ class TemperedSMCSampler(SMCSampler):
         new_ensemble_state.log_weight = previous_ensemble_state.log_weight \
                                         + self.log_weight(previous_ensemble_state, previous_extra,
                                                           new_ensemble_state, new_extra)
+        new_ensemble_state.ess = jnp.ones(n) * jnp.exp(log_ess_log_weight(new_ensemble_state.log_weight))
         return new_ensemble_state, new_extra
 
     def update(self,
@@ -241,6 +247,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
         initial_state.temperature += first_temp
         initial_state.potential = initial_state.prior_potential + first_temp * initial_state.likelihood_potential
         initial_state.log_weight = - first_temp * initial_state.likelihood_potential
+        initial_state.ess = jnp.exp(log_ess_log_weight(initial_state.log_weight))
 
         initial_state, initial_extra = vmap(
             lambda state: self.mcmc_sampler.startup(scenario,

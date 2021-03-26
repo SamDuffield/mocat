@@ -9,13 +9,14 @@ from typing import Union, Tuple, Type
 from inspect import isclass
 
 from jax import numpy as jnp, random, vmap
-from jax.lax import scan
+from jax.lax import scan, cond
 
 from mocat.src.abc.abc import ABCScenario, ABCSampler
 from mocat.src.abc.mcmc import ABCMCMCSampler, RandomWalkABC
 from mocat.src.core import cdict, is_implemented
 from mocat.src.transport.smc import SMCSampler
 from mocat.src.mcmc.sampler import Correction, check_correction
+from mocat.src.metrics import ess_log_weight
 
 
 class ABCSMCSampler(ABCSampler, SMCSampler):
@@ -30,14 +31,15 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
         super().__init__(**kwargs)
 
     def __setattr__(self, key, value):
-        super().__setattr__(key, value)
         if key == 'threshold_schedule':
             if value is None:
+                if hasattr(self, 'threshold_schedule') and self.max_iter == len(self.threshold_schedule):
+                    self.max_iter = int(1e4)
                 self.next_threshold = self.next_threshold_adaptive
-                self.max_iter = int(1e4)
             else:
                 self.next_threshold = lambda state, extra: self.threshold_schedule[extra.iter]
                 self.max_iter = len(value)
+        super().__setattr__(key, value)
 
     def startup(self,
                 abc_scenario: ABCScenario,
@@ -71,6 +73,9 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
             else:
                 initial_state.threshold = jnp.zeros(n) + self.threshold_schedule[0]
 
+        if not hasattr(initial_state, 'ess'):
+            initial_state.ess = jnp.zeros(n) + n
+
         return initial_state, initial_extra
 
     def next_threshold_adaptive(self,
@@ -82,6 +87,7 @@ class ABCSMCSampler(ABCSampler, SMCSampler):
                     abc_scenario: ABCScenario,
                     chain_ensemble_state: cdict) -> cdict:
         chain_ensemble_state.threshold = chain_ensemble_state.threshold[:, 0]
+        chain_ensemble_state.ess = chain_ensemble_state.ess[:, 0]
         return chain_ensemble_state
 
 
@@ -146,19 +152,18 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
     def resample_criterion(self,
                            ensemble_state: cdict,
                            extra: cdict) -> bool:
-        return (ensemble_state.distance < extra.parameters.threshold).mean()\
-               < extra.parameters.ess_threshold_resample
+        return ensemble_state.ess[0] < (extra.parameters.ess_threshold_resample * ensemble_state.ess.size)
 
     def termination_criterion(self,
                               ensemble_state: cdict,
                               extra: cdict) -> bool:
-        return jnp.logical_or(ensemble_state.alpha.mean() <= extra.parameters.termination_alpha,
+        return jnp.logical_or(extra.alpha_mean <= extra.parameters.termination_alpha,
                               extra.iter >= self.max_iter)
 
     def next_threshold_adaptive(self,
                                 state: cdict,
                                 extra: cdict) -> float:
-        return jnp.quantile(state.distance, extra.parameters.ess_threshold_retain)
+        return jnp.quantile(state.distance, extra.parameters.ess_threshold_retain * state.ess[0] / state.ess.size)
 
     def log_weight(self,
                    previous_ensemble_state: cdict,
@@ -176,11 +181,11 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
         clean_extra.parameters = chain_extra.parameters[-1]
         return clean_state, clean_extra
 
-    def forward_proposal(self,
-                         abc_scenario: ABCScenario,
-                         state: cdict,
-                         extra: cdict,
-                         random_key: jnp.ndarray) -> cdict:
+    def forward_proposal_non_zero_weight(self,
+                                         abc_scenario: ABCScenario,
+                                         state: cdict,
+                                         extra: cdict,
+                                         random_key: jnp.ndarray) -> cdict:
 
         def mcmc_kernel(previous_carry: Tuple[cdict, cdict],
                         _: None) -> Tuple[Tuple[cdict, cdict], Tuple[cdict, cdict]]:
@@ -202,6 +207,17 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
         advanced_state, advanced_extra = self.clean_mcmc_chain(chain[0], chain[1])
         return advanced_state
 
+    def forward_proposal(self,
+                         abc_scenario: ABCScenario,
+                         state: cdict,
+                         extra: cdict,
+                         random_key: jnp.ndarray) -> cdict:
+        return cond(state.log_weight > -jnp.inf,
+                    lambda state_extra: self.forward_proposal_non_zero_weight(abc_scenario, state_extra[0],
+                                                                              state_extra[1], random_key),
+                    lambda state_extra: state_extra[0],
+                    (state, extra))
+
     def adapt_mcmc_params(self,
                           previous_ensemble_state: cdict,
                           previous_extra: cdict,
@@ -215,14 +231,15 @@ class MetropolisedABCSMCSampler(ABCSMCSampler):
               new_ensemble_state: cdict,
               new_extra: cdict) -> Tuple[cdict, cdict]:
         n = new_ensemble_state.value.shape[0]
-        new_extra.iter = previous_extra.iter
         next_threshold = self.next_threshold(new_ensemble_state, new_extra)
         new_ensemble_state.threshold = jnp.ones(n) * next_threshold
         new_extra.parameters.threshold = next_threshold
         new_ensemble_state.log_weight = self.log_weight(previous_ensemble_state, previous_extra,
                                                         new_ensemble_state, new_extra)
+        new_ensemble_state.ess = jnp.ones(n) * ess_log_weight(new_ensemble_state.log_weight)
+        alive_inds = previous_ensemble_state.log_weight > -jnp.inf
+        new_extra.alpha_mean = (new_ensemble_state.alpha * alive_inds).sum() / alive_inds.sum()
         new_ensemble_state, new_extra = self.adapt_mcmc_params(previous_ensemble_state, previous_extra,
                                                                new_ensemble_state, new_extra)
 
         return new_ensemble_state, new_extra
-

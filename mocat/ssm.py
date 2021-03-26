@@ -15,6 +15,9 @@ from mocat.src.ssm.backward import forward_filtering_backward_simulation
 
 from mocat.src.ssm.linear_gaussian.linear_gaussian import LinearGaussian
 from mocat.src.ssm.linear_gaussian.linear_gaussian import TimeHomogenousLinearGaussian
+from mocat.src.ssm.linear_gaussian.kalman import run_kalman_filter_for_marginals
+from mocat.src.ssm.linear_gaussian.kalman import run_kalman_smoother_for_marginals
+
 
 from mocat.src.ssm.nonlinear_gaussian import NonLinearGaussian
 from mocat.src.ssm.nonlinear_gaussian import OptimalNonLinearGaussiajnparticleFilter
