@@ -247,7 +247,7 @@ class MetropolisedSMCSampler(TemperedSMCSampler):
         initial_state.temperature += first_temp
         initial_state.potential = initial_state.prior_potential + first_temp * initial_state.likelihood_potential
         initial_state.log_weight = - first_temp * initial_state.likelihood_potential
-        initial_state.ess = jnp.exp(log_ess_log_weight(initial_state.log_weight))
+        initial_state.ess = jnp.repeat(jnp.exp(log_ess_log_weight(initial_state.log_weight)), n)
 
         initial_state, initial_extra = vmap(
             lambda state: self.mcmc_sampler.startup(scenario,

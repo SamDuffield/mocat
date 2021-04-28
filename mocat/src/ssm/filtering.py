@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: ssm/filters.py
+# Module: ssm/filtering.py
 # Description: Particle filtering inc bootstrap filter.
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -194,32 +194,27 @@ def initiate_particles(ssm_scenario: StateSpaceModel,
     return initial_sample
 
 
-def _resample(x_w_r: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+def _resample(x_w_r: Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]) -> jnp.ndarray:
     x, log_weight, random_key = x_w_r
     n = x.shape[-2]
-    random_key, sub_key = random.split(random_key)
-    return x[..., random.categorical(sub_key, log_weight, shape=(n,)), :], jnp.zeros(n), random_key
+    return x[..., random.categorical(random_key, log_weight, shape=(n,)), :]
 
 
 def resample_particles(particles: cdict,
                        random_key: jnp.ndarray,
                        resample_full: bool = True) -> cdict:
     out_particles = particles.copy()
+    n = particles.value.shape[-2]
     if out_particles.log_weight.ndim == 1:
-        out_particles.value, out_particles.log_weight, _ = _resample((particles.value,
-                                                                      particles.log_weight,
-                                                                      random_key))
+        out_particles.value = _resample((particles.value, particles.log_weight, random_key))
+        out_particles.log_weight = jnp.zeros(n)
     elif resample_full:
-        out_particles.value, latest_log_weight, _ = _resample((particles.value,
-                                                               particles.log_weight[-1],
-                                                               random_key))
-        out_particles.log_weight = index_update(out_particles.log_weight, -1, latest_log_weight)
+        out_particles.value = _resample((particles.value, particles.log_weight[-1], random_key))
+        out_particles.log_weight = index_update(out_particles.log_weight, -1, jnp.zeros(n))
     else:
-        latest_value, latest_log_weight, _ = _resample((particles.value[-1],
-                                                        particles.log_weight[-1],
-                                                        random_key))
+        latest_value = _resample((particles.value[-1], particles.log_weight[-1], random_key))
         out_particles.value = index_update(out_particles.value, -1, latest_value)
-        out_particles.log_weight = index_update(out_particles.log_weight, -1, latest_log_weight)
+        out_particles.log_weight = index_update(out_particles.log_weight, -1, jnp.zeros(n))
     return out_particles
 
 
@@ -234,15 +229,15 @@ def propagate_particle_filter(ssm_scenario: StateSpaceModel,
     n = particles.value.shape[1]
     ess_previous = particles.ess[-1]
     out_particles = cond(ess_previous < ess_threshold * n,
-                         lambda tup: resample_particles(*tup),
-                         lambda tup: tup[0].copy(),
-                         (particles, random_key, resample_full))
+                         lambda p: resample_particles(p, random_key, resample_full),
+                         lambda p: p,
+                         particles)
 
     x_previous = out_particles.value[-1]
     log_weight_previous = out_particles.log_weight[-1]
     t_previous = out_particles.t[-1]
 
-    split_keys = random.split(random_key, len(x_previous))
+    split_keys = random.split(random_key, n)
 
     x_new, log_weight_new = particle_filter.propose_and_intermediate_weight_vectorised(ssm_scenario,
                                                                                        x_previous, t_previous,
@@ -250,9 +245,9 @@ def propagate_particle_filter(ssm_scenario: StateSpaceModel,
 
     log_weight_new = log_weight_previous + log_weight_new
 
-    out_particles.value = jnp.append(out_particles.value, x_new, axis=0)
-    out_particles.log_weight = jnp.append(out_particles.log_weight, log_weight_new, axis=0)
-    out_particles.y = jnp.append(out_particles.y, y_new)
+    out_particles.value = jnp.append(out_particles.value, x_new[jnp.newaxis], axis=0)
+    out_particles.log_weight = jnp.append(out_particles.log_weight, log_weight_new[jnp.newaxis], axis=0)
+    out_particles.y = jnp.append(out_particles.y, y_new[jnp.newaxis])
     out_particles.t = jnp.append(out_particles.t, t_new)
     out_particles.ess = jnp.append(out_particles.ess, ess_log_weight(log_weight_new))
     return out_particles
@@ -290,11 +285,12 @@ def run_particle_filter_for_marginals(ssm_scenario: StateSpaceModel,
         int_rand_key = int_rand_keys[iter_ind]
 
         ess_previous = samps_previous.ess
-
-        x_res, log_weight_res, int_rand_key = cond(ess_previous < (ess_threshold * n),
-                                                   _resample,
-                                                   lambda _: (x_previous, log_weight_previous, int_rand_key),
-                                                   (x_previous, log_weight_previous, int_rand_key))
+        resample_bool = ess_previous < (ess_threshold * n)
+        x_res = cond(resample_bool,
+                     _resample,
+                     lambda tup: tup[0],
+                     (x_previous, log_weight_previous, int_rand_key))
+        log_weight_res = jnp.where(resample_bool, jnp.zeros(n), log_weight_previous)
 
         split_keys = random.split(int_rand_key, len(x_previous))
 

@@ -25,6 +25,14 @@ class Test1DBootstrap(TestSSM):
     def test_backward(self):
         super()._test_backward()
 
+    def test_online_smoothing_pf(self):
+        super()._test_online_smoothing_pf_full()
+        super()._test_online_smoothing_pf_rejection()
+
+    def test_online_smoothing_bs(self):
+        super()._test_online_smoothing_bs_full()
+        super()._test_online_smoothing_bs_rejection()
+
 
 if __name__ == '__main__':
     unittest.main()

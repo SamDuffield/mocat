@@ -21,8 +21,8 @@ class _GK(ABCScenario):
 
     c: float = 0.8
 
-    prior_mins: float = 0
-    prior_maxs: float = 10
+    prior_mins: Union[float, jnp.ndarray] = 0
+    prior_maxs: Union[float, jnp.ndarray] = 10
 
     buffer: float = 1e-5
 

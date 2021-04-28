@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: backward/filters.py
+# Module: ssm/backward.py
 # Description: Backward simulation for state-space models.
 #
 # Web: https://github.com/SamDuffield/mocat
@@ -14,7 +14,7 @@ from jax.lax import while_loop, scan, cond, map
 
 from mocat.src.core import cdict
 from mocat.src.ssm.ssm import StateSpaceModel
-from mocat.src.ssm.filters import ParticleFilter, run_particle_filter_for_marginals
+from mocat.src.ssm.filtering import ParticleFilter, run_particle_filter_for_marginals
 
 
 def full_resample_single(ssm_scenario: StateSpaceModel,
@@ -101,7 +101,7 @@ def rejection_proposal_all(ssm_scenario: StateSpaceModel,
                            bound: float,
                            random_keys: jnp.ndarray,
                            rejection_iter: int,
-                           transition_evals: int) -> Tuple[jnp.ndarray, jnp.ndarray, float, jnp.ndarray, int, int]:
+                           num_transition_evals: int) -> Tuple[jnp.ndarray, jnp.ndarray, float, jnp.ndarray, int, int]:
     n = len(x1_all)
     mapped_tup = map(lambda i: rejection_proposal_single_cond(not_yet_accepted_arr[i],
                                                               x0_all_sampled[i],
@@ -121,7 +121,7 @@ def rejection_proposal_all(ssm_scenario: StateSpaceModel,
     bound = jnp.where(reset_bound, max_dens * bound_inflation, bound)
     not_yet_accepted_arr_new = jnp.where(reset_bound, jnp.ones(n, dtype='bool'), not_yet_accepted_arr_new)
     return not_yet_accepted_arr_new, x0_all_sampled, bound, random_keys, rejection_iter + 1, \
-           transition_evals + not_yet_accepted_arr.sum()
+           num_transition_evals + not_yet_accepted_arr.sum()
 
 
 def rejection_resampling(ssm_scenario: StateSpaceModel,
@@ -140,7 +140,7 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
     # Prerun to initiate bound
     x0_initial = x0_all[random.categorical(rejection_initial_keys[0], x0_log_weight, shape=(n,))]
     initial_cond_dens = jnp.exp(-vmap(ssm_scenario.transition_potential,
-                                     (0, None, 0, None))(x0_initial, t, x1_all, tplus1))
+                                      (0, None, 0, None))(x0_initial, t, x1_all, tplus1))
     max_cond_dens = jnp.max(initial_cond_dens)
     initial_bound = jnp.where(max_cond_dens > init_bound_param, max_cond_dens * bound_inflation, init_bound_param)
     initial_not_yet_accepted_arr = random.uniform(rejection_initial_keys[1], (n,)) > initial_cond_dens / initial_bound
@@ -154,7 +154,7 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
                           random.split(rejection_initial_keys[2], n),
                           1,
                           n))
-    not_yet_accepted_arr, final_particles, final_bound, random_keys, rej_attempted, transition_evals = out_tup
+    not_yet_accepted_arr, final_particles, final_bound, random_keys, rej_attempted, num_transition_evals = out_tup
 
     final_particles = map(lambda i: full_resample_single_cond(not_yet_accepted_arr[i],
                                                               final_particles[i],
@@ -166,9 +166,9 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
                                                               x0_log_weight,
                                                               random_keys[i]), jnp.arange(n))
 
-    transition_evals = transition_evals + len(x0_all) * not_yet_accepted_arr.sum()
+    num_transition_evals = num_transition_evals + len(x0_all) * not_yet_accepted_arr.sum()
 
-    return final_particles, transition_evals
+    return final_particles, num_transition_evals
 
 
 @partial(jit, static_argnums=(0, 2))
@@ -191,22 +191,22 @@ def backward_simulation_rejection(ssm_scenario: StateSpaceModel,
                                                                      shape=(n_samps,))]
 
     def back_sim_body(x_tplus1_all: jnp.ndarray, ind: int):
-        x_t_all, transition_evals = rejection_resampling(ssm_scenario,
-                                                         marg_particles_vals[ind], times[ind],
-                                                         x_tplus1_all, times[ind + 1],
-                                                         marginal_log_weight[ind], t_keys[ind],
-                                                         maximum_rejections, init_bound_param, bound_inflation)
-        return x_t_all, (x_t_all, transition_evals)
+        x_t_all, num_transition_evals = rejection_resampling(ssm_scenario,
+                                                             marg_particles_vals[ind], times[ind],
+                                                             x_tplus1_all, times[ind + 1],
+                                                             marginal_log_weight[ind], t_keys[ind],
+                                                             maximum_rejections, init_bound_param, bound_inflation)
+        return x_t_all, (x_t_all, num_transition_evals)
 
     _, back_sim_out = scan(back_sim_body,
                            final_particle_vals,
                            jnp.arange(T - 2, -1, -1), unroll=1)
 
-    back_sim_particles, transition_evals = back_sim_out
+    back_sim_particles, num_transition_evals = back_sim_out
 
     out_samps = marginal_particles.copy()
     out_samps.value = jnp.vstack([back_sim_particles[::-1], final_particle_vals[jnp.newaxis]])
-    out_samps.num_transition_evals = jnp.append(0, transition_evals[::-1])
+    out_samps.num_transition_evals = jnp.append(0, num_transition_evals[::-1])
     del out_samps.log_weight
     return out_samps
 

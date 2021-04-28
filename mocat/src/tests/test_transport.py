@@ -75,7 +75,6 @@ class TestSVGD(TestCorrelatedGaussian):
         sample = run(self.scenario, SVGD_median(max_iter=self.n_iter, stepsize=1.0),
                      n=self.n,
                      random_key=random.PRNGKey(0))
-
         self._test_mean(sample[-1])
         self._test_cov(sample[-1])
 
@@ -91,7 +90,6 @@ class TestSVGD(TestCorrelatedGaussian):
         sample = run(self.scenario, SVGD_mean(max_iter=self.n_iter, stepsize=1.0),
                      n=self.n,
                      random_key=random.PRNGKey(0))
-
         self._test_mean(sample)
         self._test_cov(sample)
 
@@ -99,7 +97,6 @@ class TestSVGD(TestCorrelatedGaussian):
         sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=lambda i: i ** -0.5),
                      n=self.n,
                      random_key=random.PRNGKey(0))
-
         self._test_mean(sample)
         self._test_cov(sample)
 
@@ -107,7 +104,6 @@ class TestSVGD(TestCorrelatedGaussian):
         sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=1.0, ensemble_batchsize=100),
                      n=1000,
                      random_key=random.PRNGKey(0))
-
         self._test_mean(sample)
         self._test_cov(sample)
 

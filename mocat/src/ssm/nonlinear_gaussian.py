@@ -13,7 +13,7 @@ from jax import numpy as jnp, random, vmap, jit
 
 from mocat.src.ssm.ssm import StateSpaceModel
 from mocat.src.utils import gaussian_potential, extract_dimension, reset_covariance, kalman_gain
-from mocat.src.ssm.filters import ParticleFilter
+from mocat.src.ssm.filtering import ParticleFilter
 
 
 class NonLinearGaussian(StateSpaceModel):

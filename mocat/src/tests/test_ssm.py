@@ -11,8 +11,9 @@ import jax.numpy as jnp
 from jax import random
 import numpy.testing as npt
 from mocat.src.ssm.ssm import StateSpaceModel
-from mocat.src.ssm.filters import BootstrapFilter, run_particle_filter_for_marginals
+from mocat.src.ssm.filtering import BootstrapFilter, run_particle_filter_for_marginals, initiate_particles
 from mocat.src.ssm.backward import backward_simulation
+from mocat.src.ssm.online_smoothing import propagate_particle_smoother
 
 
 class TestSSM(unittest.TestCase):
@@ -79,6 +80,74 @@ class TestSSM(unittest.TestCase):
     def _test_backward(self):
         self._test_ffbsi_full()
         self._test_ffbsi_rejection()
+
+    def _test_online_smoothing_pf_full(self):
+        if not hasattr(self, 'sim_samps'):
+            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
+        pf = BootstrapFilter()
+        len_t = len(self.t)
+        rkeys = random.split(random.PRNGKey(0), len_t)
+
+        particles = initiate_particles(self.ssm_scenario, pf, self.n,
+                                       rkeys[0], self.sim_samps.y[0], self.t[0])
+        for i in range(1, len_t):
+            particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
+                                                    self.sim_samps.y[i], self.t[i], rkeys[i], 3,
+                                                    False)
+
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+
+    def _test_online_smoothing_pf_rejection(self):
+        if not hasattr(self, 'sim_samps'):
+            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
+        pf = BootstrapFilter()
+        len_t = len(self.t)
+        rkeys = random.split(random.PRNGKey(0), len_t)
+
+        particles = initiate_particles(self.ssm_scenario, pf, self.n,
+                                       rkeys[0], self.sim_samps.y[0], self.t[0])
+        for i in range(1, len_t):
+            particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
+                                                    self.sim_samps.y[i], self.t[i], rkeys[i], 3,
+                                                    False, maximum_rejections=10)
+
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+
+    def _test_online_smoothing_bs_full(self):
+        if not hasattr(self, 'sim_samps'):
+            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
+        pf = BootstrapFilter()
+        len_t = len(self.t)
+        rkeys = random.split(random.PRNGKey(0), len_t)
+
+        particles = initiate_particles(self.ssm_scenario, pf, self.n,
+                                       rkeys[0], self.sim_samps.y[0], self.t[0])
+        for i in range(1, len_t):
+            particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
+                                                    self.sim_samps.y[i], self.t[i], rkeys[i], 3,
+                                                    True)
+
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+
+    def _test_online_smoothing_bs_rejection(self):
+        if not hasattr(self, 'sim_samps'):
+            self.sim_samps = self.ssm_scenario.simulate(self.t, random.PRNGKey(0))
+        pf = BootstrapFilter()
+        len_t = len(self.t)
+        rkeys = random.split(random.PRNGKey(0), len_t)
+
+        particles = initiate_particles(self.ssm_scenario, pf, self.n,
+                                       rkeys[0], self.sim_samps.y[0], self.t[0])
+        for i in range(1, len_t):
+            particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
+                                                    self.sim_samps.y[i], self.t[i], rkeys[i], 3,
+                                                    True, maximum_rejections=10)
+
+        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
+        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
 
 
 if __name__ == '__main__':

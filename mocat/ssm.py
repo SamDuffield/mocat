@@ -3,12 +3,12 @@ from mocat.src.ssm.scenarios import scenarios
 
 from mocat.src.ssm.ssm import StateSpaceModel
 
-from mocat.src.ssm.filters import ParticleFilter
-from mocat.src.ssm.filters import BootstrapFilter
-from mocat.src.ssm.filters import initiate_particles
-from mocat.src.ssm.filters import resample_particles
-from mocat.src.ssm.filters import propagate_particle_filter
-from mocat.src.ssm.filters import run_particle_filter_for_marginals
+from mocat.src.ssm.filtering import ParticleFilter
+from mocat.src.ssm.filtering import BootstrapFilter
+from mocat.src.ssm.filtering import initiate_particles
+from mocat.src.ssm.filtering import resample_particles
+from mocat.src.ssm.filtering import propagate_particle_filter
+from mocat.src.ssm.filtering import run_particle_filter_for_marginals
 
 from mocat.src.ssm.backward import backward_simulation
 from mocat.src.ssm.backward import forward_filtering_backward_simulation

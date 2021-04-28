@@ -5,8 +5,15 @@ All things Monte Carlo, written in JAX.
     * Sequential Monte Carlo samplers (likelihood tempering)
     * Stein variational gradient descent
     
-- Approximate Bayesian computation (MCMC and SMC variants)
-- State-space models (particle filtering and smoothing)
+- Approximate Bayesian computation
+    * Rejection/Importance ABC
+    * MCMC ABC
+    * SMC ABC
+  
+- State-space models
+  * Particle filtering
+  * Particle smoothing
+  * Kalman filtering + smoothing
 
 ## Install
 ```
