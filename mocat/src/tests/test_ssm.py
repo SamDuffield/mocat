@@ -94,9 +94,8 @@ class TestSSM(unittest.TestCase):
             particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
                                                     self.sim_samps.y[i], self.t[i], rkeys[i], 3,
                                                     False)
-
-        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
-        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.max(particles.value, axis=1)[:, 0]) > 0).mean(), 0.1)
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.min(particles.value, axis=1)[:, 0]) < 0).mean(), 0.1)
 
     def _test_online_smoothing_pf_rejection(self):
         if not hasattr(self, 'sim_samps'):
@@ -112,8 +111,8 @@ class TestSSM(unittest.TestCase):
                                                     self.sim_samps.y[i], self.t[i], rkeys[i], 3,
                                                     False, maximum_rejections=10)
 
-        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
-        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.max(particles.value, axis=1)[:, 0]) > 0).mean(), 0.1)
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.min(particles.value, axis=1)[:, 0]) < 0).mean(), 0.1)
 
     def _test_online_smoothing_bs_full(self):
         if not hasattr(self, 'sim_samps'):
@@ -128,9 +127,8 @@ class TestSSM(unittest.TestCase):
             particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
                                                     self.sim_samps.y[i], self.t[i], rkeys[i], 3,
                                                     True)
-
-        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
-        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.max(particles.value, axis=1)[:, 0]) > 0).mean(), 0.1)
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.min(particles.value, axis=1)[:, 0]) < 0).mean(), 0.1)
 
     def _test_online_smoothing_bs_rejection(self):
         if not hasattr(self, 'sim_samps'):
@@ -145,9 +143,8 @@ class TestSSM(unittest.TestCase):
             particles = propagate_particle_smoother(self.ssm_scenario, pf, particles,
                                                     self.sim_samps.y[i], self.t[i], rkeys[i], 3,
                                                     True, maximum_rejections=10)
-
-        npt.assert_array_less(self.sim_samps.x[:, 0], jnp.max(particles.value, axis=1)[:, 0])
-        npt.assert_array_less(jnp.min(particles.value, axis=1)[:, 0], self.sim_samps.x[:, 0])
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.max(particles.value, axis=1)[:, 0]) > 0).mean(), 0.1)
+        npt.assert_array_less(((self.sim_samps.x[:, 0] - jnp.min(particles.value, axis=1)[:, 0]) < 0).mean(), 0.1)
 
 
 if __name__ == '__main__':

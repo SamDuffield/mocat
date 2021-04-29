@@ -185,7 +185,7 @@ def fixed_lag_stitching(ssm_scenario: StateSpaceModel,
                         random_key: jnp.ndarray,
                         maximum_rejections: int,
                         init_bound_param: float,
-                        bound_inflation: float) -> jnp.ndarray:
+                        bound_inflation: float) -> Tuple[jnp.ndarray, int]:
     x0_fixed_all = early_block[-1]
 
     x0_vary_all = recent_block[0]
@@ -201,14 +201,14 @@ def fixed_lag_stitching(ssm_scenario: StateSpaceModel,
                                                                                       init_bound_param=init_bound_param,
                                                                                       bound_inflation=bound_inflation),
                                                       lambda tup: (
-                                                      full_stitch(ssm_scenario, *tup), len(x0_fixed_all) ** 2),
+                                                          full_stitch(ssm_scenario, *tup), len(x0_fixed_all) ** 2),
                                                       (x0_fixed_all, t, x1_vary_all, tplus1,
                                                        non_interacting_log_weight, random_key))
 
-    return jnp.append(early_block, recent_block[1:, recent_stitched_inds], axis=0)
+    return jnp.append(early_block, recent_block[1:, recent_stitched_inds], axis=0), num_transition_evals
 
 
-@partial(jit, static_argnums=(0, 1, 6, 7))
+@partial(jit, static_argnums=(0, 1, 6))
 def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
                                    particle_filter: ParticleFilter,
                                    particles: cdict,
@@ -219,6 +219,9 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
                                    maximum_rejections: int,
                                    init_bound_param: float,
                                    bound_inflation: float) -> cdict:
+    if not hasattr(particles, 'num_transition_evals'):
+        particles.num_transition_evals = jnp.array(0)
+
     n = particles.value.shape[1]
 
     # Check particles are unweighted
@@ -262,17 +265,18 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
     #                            out_particles.value)
 
     if stitch_ind_min_1 >= 0:
-        out_particles.value = fixed_lag_stitching(ssm_scenario,
-                                                  out_particles.value[:(stitch_ind_min_1 + 1)],
-                                                  out_particles.t[stitch_ind_min_1],
-                                                  out_particles.value[stitch_ind_min_1:],
-                                                  out_particles.log_weight,
-                                                  out_particles.t[stitch_ind],
-                                                  random_key,
-                                                  maximum_rejections,
-                                                  init_bound_param,
-                                                  bound_inflation)
-
+        out_particles.value, num_transition_evals = fixed_lag_stitching(ssm_scenario,
+                                                                        out_particles.value[:(stitch_ind_min_1 + 1)],
+                                                                        out_particles.t[stitch_ind_min_1],
+                                                                        out_particles.value[stitch_ind_min_1:],
+                                                                        out_particles.log_weight,
+                                                                        out_particles.t[stitch_ind],
+                                                                        random_key,
+                                                                        maximum_rejections,
+                                                                        init_bound_param,
+                                                                        bound_inflation)
+    num_transition_evals = jnp.where(stitch_ind_min_1 >= 0, stitch_ind_min_1 >= 0, 0)
+    out_particles.num_transition_evals = jnp.append(out_particles.num_transition_evals, num_transition_evals)
     out_particles.log_weight = jnp.where(stitch_ind_min_1 >= 0, jnp.zeros(n), out_particles.log_weight)
     return out_particles
 
@@ -290,6 +294,9 @@ def propagate_particle_smoother_bs(ssm_scenario: StateSpaceModel,
                                    init_bound_param: float,
                                    bound_inflation: float) -> cdict:
     n = particles.value.shape[1]
+
+    if not hasattr(particles, 'num_transition_evals'):
+        particles.num_transition_evals = jnp.array(0)
 
     if not hasattr(particles, 'marginal_filter'):
         particles.marginal_filter = cdict(value=particles.value,
@@ -315,13 +322,14 @@ def propagate_particle_smoother_bs(ssm_scenario: StateSpaceModel,
     stitch_ind = len_t - lag
 
     def back_sim_only(marginal_filter):
-        return backward_simulation(ssm_scenario,
-                                   marginal_filter,
-                                   split_keys[2],
-                                   n,
-                                   maximum_rejections,
-                                   init_bound_param,
-                                   bound_inflation).value
+        backward_sim = backward_simulation(ssm_scenario,
+                                           marginal_filter,
+                                           split_keys[2],
+                                           n,
+                                           maximum_rejections,
+                                           init_bound_param,
+                                           bound_inflation)
+        return backward_sim.value, backward_sim.num_transition_evals.sum()
 
     def back_sim_and_stitch(marginal_filter):
         backward_sim = backward_simulation(ssm_scenario,
@@ -332,21 +340,24 @@ def propagate_particle_smoother_bs(ssm_scenario: StateSpaceModel,
                                            init_bound_param,
                                            bound_inflation)
 
-        return fixed_lag_stitching(ssm_scenario,
-                                   out_particles.value[:(stitch_ind_min_1 + 1)],
-                                   out_particles.t[stitch_ind_min_1],
-                                   backward_sim.value,
-                                   jnp.zeros(n),
-                                   out_particles.t[stitch_ind],
-                                   random_key,
-                                   maximum_rejections,
-                                   init_bound_param,
-                                   bound_inflation)
+        vals, stitch_nte = fixed_lag_stitching(ssm_scenario,
+                                               out_particles.value[:(stitch_ind_min_1 + 1)],
+                                               out_particles.t[stitch_ind_min_1],
+                                               backward_sim.value,
+                                               jnp.zeros(n),
+                                               out_particles.t[stitch_ind],
+                                               random_key,
+                                               maximum_rejections,
+                                               init_bound_param,
+                                               bound_inflation)
+        return vals, stitch_nte + backward_sim.num_transition_evals.sum()
 
     if stitch_ind_min_1 >= 0:
-        out_particles.value = back_sim_and_stitch(out_particles.marginal_filter)
+        out_particles.value, num_transition_evals = back_sim_and_stitch(out_particles.marginal_filter)
     else:
-        out_particles.value = back_sim_only(out_particles.marginal_filter)
+        out_particles.value, num_transition_evals = back_sim_only(out_particles.marginal_filter)
+
+    out_particles.num_transition_evals = jnp.append(out_particles.num_transition_evals, num_transition_evals)
 
     # out_particles.value = cond(stitch_ind_min_1 >= 0,
     #                            back_sim_and_stitch,
