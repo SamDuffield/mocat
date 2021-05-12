@@ -5,13 +5,13 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Any, Union, Callable, Tuple
 from functools import partial
+from typing import Any, Union, Callable, Tuple
 from warnings import warn
 
-from jax.lax import scan, while_loop, cond
 from jax import jit, numpy as jnp, vmap
-
+from jax.lax import scan, while_loop, cond
+from jax.ops import index_update
 from mocat.src.core import cdict
 
 
@@ -52,6 +52,7 @@ def gaussian_potential(x: jnp.ndarray,
                        prec: Union[float, jnp.ndarray] = None,
                        sqrt_prec: Union[float, jnp.ndarray] = None,
                        det_prec: float = None) -> Union[float, jnp.ndarray]:
+    # sqrt_prec such that prec = sqrt_prec @ sqrt_prec.T
     d = x.shape[-1]
 
     if prec is None and sqrt_prec is None:
@@ -192,9 +193,9 @@ def bisect(fun: Callable,
     def conv_check(int_state: Tuple[jnp.ndarray, jnp.ndarray, int]) -> bool:
         int_bounds, int_evals, iter_ind = int_state
         return ~jnp.any(jnp.array([jnp.min(jnp.abs(int_evals)) < tol,
-                                 iter_ind >= max_iter,
-                                 jnp.all(int_evals < 0),
-                                 jnp.all(int_evals > 0)]))
+                                   iter_ind >= max_iter,
+                                   jnp.all(int_evals < 0),
+                                   jnp.all(int_evals > 0)]))
 
     def body_func(int_state: Tuple[jnp.ndarray, jnp.ndarray, int]) -> Tuple[jnp.ndarray, jnp.ndarray, int]:
         int_bounds, int_evals, iter_ind = int_state
@@ -239,51 +240,67 @@ def reset_covariance(obj: Any,
         setattr(obj, prec_key + '_det', 1 / jnp.linalg.det(value))
 
 
-def bfgs_update(prev_sqrt: jnp.ndarray,
-                prev_inv_sqrt: jnp.ndarray,
-                val_diff: jnp.ndarray,
-                grad_diff: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    sty = val_diff.T @ grad_diff
+@jit
+def _bfgs_sqrt_pqut(vals: jnp.ndarray,
+                    grads: jnp.ndarray,
+                    init_hessian_sqrt_diag: jnp.ndarray,
+                    force_pd: bool) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    s = vals[1:] - vals[:-1]
+    y = grads[1:] - grads[:-1]
 
-    prev_hess_val_diff = prev_sqrt @ prev_sqrt.T @ val_diff
-    hess_val_ip = val_diff.T @ prev_hess_val_diff
+    m, d = s.shape
 
-    p = val_diff / sty
-    # q = jnp.sqrt(sty / (prev_hess_val_diff.T @ grad_diff)) * prev_hess_val_diff - grad_diff
-    q = jnp.sqrt(sty / hess_val_ip) * prev_hess_val_diff + grad_diff
+    def body_fun(val, i):
+        us, ts = val
+        sit_yi = jnp.dot(s[i], y[i])
+        update_bool = jnp.logical_or(sit_yi > 0, ~force_pd)
+        Ct_si = bfgs_sqrt_transpose_prod(us, ts, s[i], init_hessian_sqrt_diag)
+        B_si = bfgs_sqrt_prod(us, ts, Ct_si, init_hessian_sqrt_diag)
+        sit_B_si = jnp.dot(s[i], B_si)
+        p = jnp.where(update_bool, s[i] / sit_yi, jnp.zeros(d))
+        q = jnp.where(update_bool, jnp.sqrt(sit_yi / sit_B_si) * B_si + y[i], jnp.zeros(d))
+        u = jnp.where(update_bool, jnp.sqrt(sit_B_si / sit_yi) * y[i] + B_si, jnp.zeros(d))
+        t = jnp.where(update_bool, s[i] / sit_B_si, jnp.zeros(d))
+        return (index_update(us, i, u), index_update(ts, i, t)), (p, q, u, t)
 
-    t = val_diff / hess_val_ip
-    u = jnp.sqrt(hess_val_ip / sty) * grad_diff + prev_hess_val_diff
-
-    dim = val_diff.size
-    new_inv_sqrt = (jnp.eye(dim) - jnp.outer(p, q)) @ prev_inv_sqrt
-    new_sqrt = (jnp.eye(dim) - jnp.outer(u, t)) @ prev_sqrt
-
-    return new_sqrt, new_inv_sqrt
+    return scan(body_fun, (jnp.zeros((m, d)), jnp.zeros((m, d))), jnp.arange(m))[1]
 
 
-def _cond_bfgs_update(prev_sqrt: jnp.ndarray,
-                      prev_inv_sqrt: jnp.ndarray,
-                      val_diff: jnp.ndarray,
-                      grad_diff: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    sty = val_diff.T @ grad_diff
-    return cond(jnp.logical_or(sty <= 0, jnp.any(jnp.isnan(val_diff))),
-                lambda _: (prev_sqrt, prev_inv_sqrt),
-                lambda tup: bfgs_update(*tup),
-                (prev_sqrt, prev_inv_sqrt, val_diff, grad_diff))
+def bfgs_sqrt_pqut(vals: jnp.ndarray,
+                   grads: jnp.ndarray,
+                   init_hessian_sqrt_diag: jnp.ndarray,
+                   force_pd: bool = False) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    return _bfgs_sqrt_pqut(vals, grads, init_hessian_sqrt_diag, force_pd)
 
 
 @jit
-def bfgs(initial_sqrt: jnp.ndarray,
-         initial_inv_sqrt: jnp.ndarray,
-         vals: jnp.ndarray,
-         grads: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray]:
-    final_carry, _ = scan(
-        lambda prev_sqrts, i: (_cond_bfgs_update(*prev_sqrts, vals[i] - vals[i - 1], grads[i] - grads[i - 1]),
-                               None),
-        (initial_sqrt, initial_inv_sqrt),
-        jnp.arange(1, len(vals)))
-    return final_carry
+def bfgs_sqrt_prod(ps: jnp.ndarray,
+                   qs: jnp.ndarray,
+                   z: jnp.ndarray,
+                   init_diag: jnp.ndarray) -> jnp.ndarray:
+    def body_fun(ci_z, i):
+        return ci_z - ps[i] * jnp.dot(qs[i], ci_z), None
+
+    return scan(body_fun, init_diag * z, jnp.arange(len(ps)))[0]
+
+
+@jit
+def bfgs_sqrt_transpose_prod(ps: jnp.ndarray,
+                             qs: jnp.ndarray,
+                             z: jnp.ndarray,
+                             init_diag: jnp.ndarray) -> jnp.ndarray:
+    def body_fun(ci_z, i):
+        return ci_z - qs[i] * jnp.dot(ps[i], ci_z), None
+
+    return init_diag * scan(body_fun, z, jnp.arange(len(ps) - 1, -1, -1))[0]
+
+@jit
+def bfgs_sqrt_det(ps: jnp.ndarray,
+                   qs: jnp.ndarray,
+                   init_diag: jnp.ndarray) -> jnp.ndarray:
+
+    return jnp.prod(init_diag) * (1 - vmap(jnp.dot)(ps, qs)).prod()
+
 
 
 @jit
@@ -320,8 +337,8 @@ def _gc(z, radius):
 def gc_matrix(dim: int,
               radius: float):
     return vmap(lambda i: _gc(jnp.min(jnp.array([jnp.abs(jnp.arange(dim) - i),
-                                               jnp.abs(jnp.arange(dim) + dim - i),
-                                               jnp.abs(jnp.arange(dim) - dim - i)]), axis=0), radius)
+                                                 jnp.abs(jnp.arange(dim) + dim - i),
+                                                 jnp.abs(jnp.arange(dim) - dim - i)]), axis=0), radius)
                 )(jnp.arange(dim))
 
 

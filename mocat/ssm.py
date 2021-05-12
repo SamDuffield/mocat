@@ -24,7 +24,7 @@ from mocat.src.ssm.linear_gaussian.kalman import run_kalman_smoother_for_margina
 
 
 from mocat.src.ssm.nonlinear_gaussian import NonLinearGaussian
-from mocat.src.ssm.nonlinear_gaussian import OptimalNonLinearGaussiajnparticleFilter
+from mocat.src.ssm.nonlinear_gaussian import OptimalNonLinearGaussianParticleFilter
 from mocat.src.ssm.nonlinear_gaussian import EnsembleKalmanFilter
 
 

@@ -156,7 +156,7 @@ class StateSpaceModel:
                                  x_init,
                                  jnp.arange(1, len_t))
 
-        x_all = jnp.vstack([x_init, x_all_but_zero])
+        x_all = jnp.append(x_init[jnp.newaxis], x_all_but_zero, axis=0)
 
         y = vmap(self.likelihood_sample)(x_all, t_all, obs_keys)
 

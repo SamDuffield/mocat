@@ -24,10 +24,13 @@ class NonLinearGaussian(StateSpaceModel):
 
     initial_covariance_sqrt: jnp.ndarray = None
     initial_precision_sqrt: jnp.ndarray = None
+    initial_precision_det: float = None
     transition_covariance_sqrt: jnp.ndarray = None
     transition_precision_sqrt: jnp.ndarray = None
+    transition_precision_det: float = None
     likelihood_covariance_sqrt: jnp.ndarray = None
     likelihood_precision_sqrt: jnp.ndarray = None
+    likelihood_precision_det: jnp.ndarray = None
 
     def __init__(self,
                  initial_mean: jnp.ndarray = None,
@@ -77,7 +80,8 @@ class NonLinearGaussian(StateSpaceModel):
     def initial_potential(self,
                           x: jnp.ndarray,
                           t: float) -> Union[float, jnp.ndarray]:
-        return gaussian_potential(x, self.initial_mean, sqrt_prec=self.initial_precision_sqrt)
+        return gaussian_potential(x, self.initial_mean,
+                                  sqrt_prec=self.initial_precision_sqrt, det_prec=self.initial_precision_det)
 
     def initial_sample(self,
                        t: float,
@@ -98,7 +102,7 @@ class NonLinearGaussian(StateSpaceModel):
                              t_new: float) -> Union[float, jnp.ndarray]:
         return gaussian_potential(x_new,
                                   self.transition_function(x_previous, t_previous, t_new),
-                                  sqrt_prec=self.transition_precision_sqrt)
+                                  sqrt_prec=self.transition_precision_sqrt, det_prec=self.transition_precision_det)
 
     def transition_sample(self,
                           x_previous: jnp.ndarray,
@@ -114,7 +118,7 @@ class NonLinearGaussian(StateSpaceModel):
                              t: float) -> Union[float, jnp.ndarray]:
         return gaussian_potential(y,
                                   x @ self.likelihood_matrix.T,
-                                  sqrt_prec=self.likelihood_precision_sqrt)
+                                  sqrt_prec=self.likelihood_precision_sqrt, det_prec=self.likelihood_precision_det)
 
     def likelihood_sample(self,
                           x: jnp.ndarray,
@@ -127,7 +131,7 @@ class NonLinearGaussian(StateSpaceModel):
                + random.normal(random_key, shape=rand_shape) @ self.likelihood_covariance_sqrt.T
 
 
-class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
+class OptimalNonLinearGaussianParticleFilter(ParticleFilter):
     # NOTE we assume time-homogenous transition noise covariance
     # that is x_t ~ N(f_t(x_s), Q) where Q is independent of s, t or t-s
     # time-inhomogoneous transition noise covariance would require matrix inversions
@@ -139,10 +143,13 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
     initial_kalman_gain: jnp.ndarray = None
     initial_conditioned_precision_sqrt: jnp.ndarray = None
     initial_conditioned_covariance_sqrt: jnp.ndarray = None
+    initial_conditioned_precision_det: float = None
     proposal_kalman_gain: jnp.ndarray = None
     proposal_precision_sqrt: jnp.ndarray = None
     proposal_covariance_sqrt: jnp.ndarray = None
+    proposal_precision_det: float = None
     weight_precision_sqrt: jnp.ndarray = None
+    weight_precision_det: float = None
 
     def startup(self,
                 ssm_scenario: NonLinearGaussian):
@@ -159,10 +166,11 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
                          + lik_mat_t_lik_prec_sqrt @ lik_mat_t_lik_prec_sqrt.T
         self.initial_conditioned_precision_sqrt = jnp.linalg.cholesky(init_cond_prec)
         self.initial_conditioned_covariance_sqrt = jnp.linalg.inv(self.initial_conditioned_precision_sqrt)
+        self.initial_conditioned_precision_det = jnp.linalg.det(init_cond_prec)
 
         lik_mat_transition_cov_sqrt = lik_mat @ transition_cov_sqrt
         weight_precision = jnp.linalg.inv(lik_mat_transition_cov_sqrt @ lik_mat_transition_cov_sqrt.T
-                                         + lik_cov_sqrt @ lik_cov_sqrt.T)
+                                          + lik_cov_sqrt @ lik_cov_sqrt.T)
         self.proposal_kalman_gain = kalman_gain(transition_cov_sqrt, lik_mat, lik_cov_sqrt, inv_mat=weight_precision)
 
         proposal_cov = ssm_scenario.transition_covariance \
@@ -170,8 +178,10 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
                        @ ssm_scenario.transition_covariance
         self.proposal_covariance_sqrt = jnp.linalg.cholesky(proposal_cov)
         self.proposal_precision_sqrt = jnp.linalg.inv(self.proposal_covariance_sqrt)
+        self.proposal_precision_det = 1 / jnp.linalg.det(proposal_cov)
 
         self.weight_precision_sqrt = jnp.linalg.cholesky(weight_precision)
+        self.weight_precision_det = jnp.linalg.det(weight_precision)
 
     def initial_potential(self,
                           ssm_scenario: NonLinearGaussian,
@@ -181,7 +191,9 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
         initial_conditioned_mean = ssm_scenario.initial_mean \
                                    + self.initial_kalman_gain \
                                    @ (y - ssm_scenario.likelihood_matrix @ ssm_scenario.initial_mean)
-        return gaussian_potential(x, initial_conditioned_mean, sqrt_prec=self.initial_conditioned_precision_sqrt)
+        return gaussian_potential(x, initial_conditioned_mean,
+                                  sqrt_prec=self.initial_conditioned_precision_sqrt,
+                                  det_prec=self.initial_conditioned_precision_det)
 
     def initial_sample(self,
                        ssm_scenario: NonLinearGaussian,
@@ -221,7 +233,8 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
         mx = ssm_scenario.transition_function(x_previous, t_previous, t_new)
         conditioned_mean = mx + (y_new - mx @ ssm_scenario.likelihood_matrix.T) @ self.proposal_kalman_gain.T
         return gaussian_potential(x_new, conditioned_mean,
-                                  sqrt_prec=self.proposal_precision_sqrt)
+                                  sqrt_prec=self.proposal_precision_sqrt,
+                                  det_prec=self.proposal_precision_det)
 
     def proposal_sample(self,
                         ssm_scenario: NonLinearGaussian,
@@ -245,7 +258,8 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
         mx = ssm_scenario.transition_function(x_previous, t_previous, t_new)
         return -gaussian_potential(y_new,
                                    mx @ ssm_scenario.likelihood_matrix.T,
-                                   sqrt_prec=self.weight_precision_sqrt)
+                                   sqrt_prec=self.weight_precision_sqrt,
+                                   det_prec=self.weight_precision_det)
 
     @partial(jit, static_argnums=(0, 1))
     def propose_and_intermediate_weight_vectorised(self,
@@ -261,8 +275,9 @@ class OptimalNonLinearGaussiajnparticleFilter(ParticleFilter):
                 + random.normal(random_keys[0], shape=x_previous.shape) @ self.proposal_covariance_sqrt.T
 
         log_weight_new = -gaussian_potential(y_new,
-                                              mx @ ssm_scenario.likelihood_matrix.T,
-                                              sqrt_prec=self.weight_precision_sqrt)
+                                             mx @ ssm_scenario.likelihood_matrix.T,
+                                             sqrt_prec=self.weight_precision_sqrt,
+                                             det_prec=self.weight_precision_det)
         return x_new, log_weight_new
 
 

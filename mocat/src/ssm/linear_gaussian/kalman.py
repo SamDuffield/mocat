@@ -1,5 +1,5 @@
 ########################################################################################################################
-# Module: ssm/linear_gaussian/kalman.py
+# Module: ssm/linear_gaussian/linear_gaussian_1D_N500.py
 # Description: Kalman filtering/smoothing for linear Gaussian state-space models.
 #
 # Web: https://github.com/SamDuffield/mocat

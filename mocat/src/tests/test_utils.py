@@ -34,7 +34,7 @@ class TestLeaveOneOut(unittest.TestCase):
         npt.assert_array_equal(inds_n_plus_1, jnp.arange(self.n))
 
 
-class TestGaussiajnpotential(unittest.TestCase):
+class TestGaussianPotential(unittest.TestCase):
 
     def test_n1_d1(self):
         x = jnp.array([7.])
@@ -112,8 +112,6 @@ class TestGaussiajnpotential(unittest.TestCase):
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
             sqrt_prec = jnp.array([[5., 0.], [2., 3.]])
-            npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
-                                   jnp.ones(5) * 29)
             npt.assert_array_equal(utils.gaussian_potential(x, sqrt_prec=sqrt_prec),
                                    jnp.repeat(0.5 * x[0].T @ sqrt_prec @ sqrt_prec.T @ x[0], 5))
             npt.assert_array_equal(utils.gaussian_potential(x, m, sqrt_prec=sqrt_prec),
@@ -202,41 +200,88 @@ class TestBFGS(unittest.TestCase):
     vals = random.normal(random.PRNGKey(0), shape=(100, 2))
     grads = vmap(grad_gauss_pot, in_axes=(None, 0))(hess, vals)
 
-    def test_correct_init(self):
-        a5_sqrt, a5_inv_sqrt = utils.bfgs(self.hess_sqrt, self.hess_inv_sqrt,
-                                          self.vals[:5], self.grads[:5])
-        npt.assert_array_almost_equal(a5_sqrt @ a5_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a5_inv_sqrt @ a5_inv_sqrt.T, self.hess_inv, decimal=3)
+    def test_not_pd(self):
+        z = jnp.array([4.2, -3.7])
+        init_hessian_sqrt_diag = jnp.array([0.3, 1.5])
+        init_hessian_sqrt_diag = jnp.diag(self.hess_sqrt)
+        # init_hessian_sqrt_diag = jnp.ones(2) * 0.1
 
-        a10_sqrt, a10_inv_sqrt = utils.bfgs(self.hess_sqrt, self.hess_inv_sqrt,
-                                            self.vals[:10], self.grads[:10])
-        npt.assert_array_almost_equal(a10_sqrt @ a10_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a10_inv_sqrt @ a10_inv_sqrt.T, self.hess_inv, decimal=3)
+        ps, qs, us, ts = utils.bfgs_sqrt_pqut(self.vals, self.grads, init_hessian_sqrt_diag)
 
-        a_sqrt, a_inv_sqrt = utils.bfgs(self.hess_sqrt, self.hess_inv_sqrt,
-                                        self.vals, self.grads)
-        npt.assert_array_almost_equal(a_sqrt @ a_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a_inv_sqrt @ a_inv_sqrt.T, self.hess_inv, decimal=3)
+        # Test transpose prod
+        hess_inv_sqrt_t_z = utils.bfgs_sqrt_transpose_prod(ps, qs, z, 1/init_hessian_sqrt_diag)
+        z2 = z.copy()
+        for i in range(len(ps)-1 , -1, -1):
+            z2 = (jnp.eye(2) - jnp.outer(qs[i], ps[i])) @ z2
+        z2 = 1/init_hessian_sqrt_diag * z2
+        npt.assert_array_almost_equal(hess_inv_sqrt_t_z, z2, decimal=3)
 
-    def test_diag_init(self):
-        gamma = 2.
-        init_sqrt = jnp.eye(2) * gamma
-        init_inv_sqrt = jnp.eye(2) / gamma
+        # Test prod
+        hess_inv_z = utils.bfgs_sqrt_prod(ps, qs, hess_inv_sqrt_t_z, 1/init_hessian_sqrt_diag)
+        z3 = 1/init_hessian_sqrt_diag * z2.copy()
+        for i in range(len(ps)):
+            z3 = (jnp.eye(2) - jnp.outer(ps[i], qs[i])) @ z3
+        npt.assert_array_almost_equal(hess_inv_z, z3, decimal=3)
 
-        a5_sqrt, a5_inv_sqrt = utils.bfgs(init_sqrt, init_inv_sqrt,
-                                          self.vals[:5], self.grads[:5])
-        npt.assert_array_almost_equal(a5_sqrt @ a5_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a5_inv_sqrt @ a5_inv_sqrt.T, self.hess_inv, decimal=1)
+        # Test accurate hessian inverse mvp
+        npt.assert_array_almost_equal(self.hess_inv @ z, hess_inv_z, decimal=3)
 
-        a10_sqrt, a10_inv_sqrt = utils.bfgs(init_sqrt, init_inv_sqrt,
-                                            self.vals[:10], self.grads[:10])
-        npt.assert_array_almost_equal(a10_sqrt @ a10_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a10_inv_sqrt @ a10_inv_sqrt.T, self.hess_inv, decimal=3)
+        # Test accurate hessian mvp
+        hess_sqrt_t_z = utils.bfgs_sqrt_transpose_prod(us, ts, z, init_hessian_sqrt_diag)
+        hess_z = utils.bfgs_sqrt_prod(us, ts, hess_sqrt_t_z, init_hessian_sqrt_diag)
+        npt.assert_array_almost_equal(self.hess @ z, hess_z, decimal=3)
 
-        a_sqrt, a_inv_sqrt = utils.bfgs(init_sqrt, init_inv_sqrt,
-                                        self.vals, self.grads)
-        npt.assert_array_almost_equal(a_sqrt @ a_sqrt.T, self.hess, decimal=3)
-        npt.assert_array_almost_equal(a_inv_sqrt @ a_inv_sqrt.T, self.hess_inv, decimal=3)
+        # Test determinant
+        hess_inv_det = utils.bfgs_sqrt_det(ps, qs, 1/init_hessian_sqrt_diag) ** 2
+        npt.assert_almost_equal(hess_inv_det, jnp.linalg.det(self.hess_inv), decimal=3)
+        hess_det = utils.bfgs_sqrt_det(us, ts, init_hessian_sqrt_diag) ** 2
+        npt.assert_almost_equal(hess_det, jnp.linalg.det(self.hess), decimal=3)
+
+
+    def test_pd(self):
+        z = jnp.array([4.2, -3.7])
+        init_hessian_sqrt_diag = jnp.array([0.3, 1.5])
+        init_hessian_sqrt_diag = jnp.diag(self.hess_sqrt)
+        # init_hessian_sqrt_diag = jnp.ones(2) * 0.1
+
+        ps, qs, us, ts = utils.bfgs_sqrt_pqut(self.vals, self.grads, init_hessian_sqrt_diag, force_pd=True)
+
+        # Test transpose prod
+        hess_inv_sqrt_t_z = utils.bfgs_sqrt_transpose_prod(ps, qs, z, 1/init_hessian_sqrt_diag)
+        z2 = z.copy()
+        for i in range(len(ps)-1 , -1, -1):
+            z2 = (jnp.eye(2) - jnp.outer(qs[i], ps[i])) @ z2
+        z2 = 1/init_hessian_sqrt_diag * z2
+        npt.assert_array_almost_equal(hess_inv_sqrt_t_z, z2, decimal=3)
+
+        # Test prod
+        hess_inv_z = utils.bfgs_sqrt_prod(ps, qs, hess_inv_sqrt_t_z, 1/init_hessian_sqrt_diag)
+        z3 = 1/init_hessian_sqrt_diag * z2.copy()
+        for i in range(len(ps)):
+            z3 = (jnp.eye(2) - jnp.outer(ps[i], qs[i])) @ z3
+        npt.assert_array_almost_equal(hess_inv_z, z3, decimal=3)
+
+        # Test accurate hessian inverse mvp
+        npt.assert_array_almost_equal(self.hess_inv @ z, hess_inv_z, decimal=3)
+
+        # Test accurate hessian mvp
+        hess_sqrt_t_z = utils.bfgs_sqrt_transpose_prod(us, ts, z, init_hessian_sqrt_diag)
+        hess_z = utils.bfgs_sqrt_prod(us, ts, hess_sqrt_t_z, init_hessian_sqrt_diag)
+        npt.assert_array_almost_equal(self.hess @ z, hess_z, decimal=3)
+
+        # Test determinant
+        hess_inv_det = utils.bfgs_sqrt_det(ps, qs, 1/init_hessian_sqrt_diag) ** 2
+        npt.assert_almost_equal(hess_inv_det, jnp.linalg.det(self.hess_inv), decimal=3)
+        hess_det = utils.bfgs_sqrt_det(us, ts, init_hessian_sqrt_diag) ** 2
+        npt.assert_almost_equal(hess_det, jnp.linalg.det(self.hess), decimal=3)
+
+        # Test inverse Hessian positive definite - somewhat null and void as the Gaussian potential is convex
+        def inv_hess_pd(vec):
+            hess_inv_sqrt_t_vec = utils.bfgs_sqrt_transpose_prod(ps, qs, vec, 1/init_hessian_sqrt_diag)
+            hess_inv_vec = utils.bfgs_sqrt_prod(ps, qs, hess_inv_sqrt_t_vec, 1 / init_hessian_sqrt_diag)
+            return jnp.dot(vec, hess_inv_vec)
+        ips = vmap(inv_hess_pd)(self.vals)
+        npt.assert_array_less(-ips, 0)
 
 
 if __name__ == '__main__':

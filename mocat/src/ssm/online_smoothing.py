@@ -6,12 +6,10 @@
 ########################################################################################################################
 
 from typing import Tuple
-from time import time
 from functools import partial
 
 from jax import numpy as jnp, random, vmap, jit
-from jax.lax import while_loop, scan, cond, map
-from jax.ops import index_update
+from jax.lax import while_loop, cond, map
 
 from mocat.src.core import cdict
 from mocat.src.ssm.ssm import StateSpaceModel
@@ -149,7 +147,7 @@ def rejection_stitching(ssm_scenario: StateSpaceModel,
     initial_bound = jnp.where(max_cond_dens > init_bound_param, max_cond_dens * bound_inflation, init_bound_param)
     initial_not_yet_accepted_arr = random.uniform(rejection_initial_keys[1], (n,)) > initial_cond_dens / initial_bound
 
-    out_tup = while_loop(lambda tup: jnp.logical_and(tup[0].sum() > 0, tup[-1] < maximum_rejections),
+    out_tup = while_loop(lambda tup: jnp.logical_and(tup[0].sum() > 0, tup[-2] < maximum_rejections),
                          lambda tup: rejection_stitch_proposal_all(ssm_scenario, x0_all, t, x1_all, tplus1,
                                                                    x1_log_weight,
                                                                    bound_inflation, *tup),
@@ -176,6 +174,7 @@ def rejection_stitching(ssm_scenario: StateSpaceModel,
     return x1_final_inds, num_transition_evals
 
 
+@partial(jit, static_argnums=(0,))
 def fixed_lag_stitching(ssm_scenario: StateSpaceModel,
                         early_block: jnp.ndarray,
                         t: float,
@@ -195,20 +194,21 @@ def fixed_lag_stitching(ssm_scenario: StateSpaceModel,
                                  + vmap(ssm_scenario.transition_potential, (0, None, 0, None))(x0_vary_all, t,
                                                                                                x1_vary_all, tplus1)
 
-    recent_stitched_inds, num_transition_evals = cond(maximum_rejections > 0,
-                                                      lambda tup: rejection_stitching(ssm_scenario, *tup,
-                                                                                      maximum_rejections=maximum_rejections,
-                                                                                      init_bound_param=init_bound_param,
-                                                                                      bound_inflation=bound_inflation),
-                                                      lambda tup: (
-                                                          full_stitch(ssm_scenario, *tup), len(x0_fixed_all) ** 2),
-                                                      (x0_fixed_all, t, x1_vary_all, tplus1,
-                                                       non_interacting_log_weight, random_key))
+    recent_stitched_inds, num_transition_evals \
+        = cond(maximum_rejections > 0,
+               lambda tup: rejection_stitching(ssm_scenario, *tup,
+                                               maximum_rejections=maximum_rejections,
+                                               init_bound_param=init_bound_param,
+                                               bound_inflation=bound_inflation),
+               lambda tup: (
+                   full_stitch(ssm_scenario, *tup), len(x0_fixed_all) ** 2),
+               (x0_fixed_all, t, x1_vary_all, tplus1,
+                non_interacting_log_weight, random_key))
 
     return jnp.append(early_block, recent_block[1:, recent_stitched_inds], axis=0), num_transition_evals
 
 
-@partial(jit, static_argnums=(0, 1, 6))
+@partial(jit, static_argnums=(0, 1, 6, 7))
 def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
                                    particle_filter: ParticleFilter,
                                    particles: cdict,
@@ -225,7 +225,7 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
     n = particles.value.shape[1]
 
     # Check particles are unweighted
-    out_particles = cond(ess_log_weight(particles.log_weight[-1]) < (n - 1e-3),
+    out_particles = cond(ess_log_weight(jnp.atleast_2d(particles.log_weight)[-1]) < (n - 1e-3),
                          lambda p: resample_particles(p, random_key, True),
                          lambda p: p.copy(),
                          particles)
@@ -242,7 +242,7 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
                                                                                                  split_keys)
 
     out_particles.value = jnp.append(out_particles.value, x_new[jnp.newaxis], axis=0)
-    out_particles.y = jnp.append(out_particles.y, y_new[jnp.newaxis])
+    out_particles.y = jnp.append(out_particles.y, y_new[jnp.newaxis], axis=0)
     out_particles.t = jnp.append(out_particles.t, t_new)
     out_particles.ess = ess_log_weight(out_particles.log_weight)
 
@@ -264,6 +264,7 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
     #                            lambda vals: vals,
     #                            out_particles.value)
 
+    num_transition_evals = 0
     if stitch_ind_min_1 >= 0:
         out_particles.value, num_transition_evals = fixed_lag_stitching(ssm_scenario,
                                                                         out_particles.value[:(stitch_ind_min_1 + 1)],
@@ -275,7 +276,6 @@ def propagate_particle_smoother_pf(ssm_scenario: StateSpaceModel,
                                                                         maximum_rejections,
                                                                         init_bound_param,
                                                                         bound_inflation)
-    num_transition_evals = jnp.where(stitch_ind_min_1 >= 0, stitch_ind_min_1 >= 0, 0)
     out_particles.num_transition_evals = jnp.append(out_particles.num_transition_evals, num_transition_evals)
     out_particles.log_weight = jnp.where(stitch_ind_min_1 >= 0, jnp.zeros(n), out_particles.log_weight)
     return out_particles
@@ -312,7 +312,7 @@ def propagate_particle_smoother_bs(ssm_scenario: StateSpaceModel,
     # Propagate marginal filter particles
     out_particles.marginal_filter = propagate_particle_filter(ssm_scenario, particle_filter, particles.marginal_filter,
                                                               y_new, t_new, split_keys[1], ess_threshold, False)
-    out_particles.y = jnp.append(out_particles.y, y_new)
+    out_particles.y = jnp.append(out_particles.y, y_new[jnp.newaxis], axis=0)
     out_particles.t = jnp.append(out_particles.t, t_new)
     out_particles.log_weight = jnp.zeros(n)
     out_particles.ess = out_particles.marginal_filter.ess[-1]

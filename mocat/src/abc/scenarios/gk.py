@@ -15,7 +15,7 @@ from mocat.src.abc.abc import ABCScenario
 
 
 class _GK(ABCScenario):
-    name: str = 'GK'
+    name: str = 'GK_fewN'
     n_unsummarised_data: int = None
     dim: int = 4
 
@@ -97,7 +97,7 @@ class GKTransformedUniformPrior(_GK, AbsBaseClass):
 
 
 class GKOnlyAUniformPrior(_GK, AbsBaseClass):
-    name: str = 'GK only A'
+    name: str = 'GK_fewN only A'
     dim: int = 1
 
     B: float = 1.
@@ -127,7 +127,7 @@ class GKOnlyAUniformPrior(_GK, AbsBaseClass):
 
 
 class GKOnlyATransformedUniformPrior(_GK, AbsBaseClass):
-    name: str = 'GK only A'
+    name: str = 'GK_fewN only A'
     dim: int = 1
 
     B: float = 1.

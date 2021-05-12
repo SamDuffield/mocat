@@ -99,7 +99,7 @@ def ksd(sample: Union[jnp.ndarray, cdict],
 
     if grad_potential is None and isinstance(sample, cdict) and hasattr(sample, 'grad_potential'):
         grad_potential = sample.grad_potential
-    else:
+    elif grad_potential is None:
         raise TypeError('grad_potential not found')
 
     if ensemble_batchsize is None:

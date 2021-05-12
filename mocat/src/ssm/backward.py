@@ -145,7 +145,7 @@ def rejection_resampling(ssm_scenario: StateSpaceModel,
     initial_bound = jnp.where(max_cond_dens > init_bound_param, max_cond_dens * bound_inflation, init_bound_param)
     initial_not_yet_accepted_arr = random.uniform(rejection_initial_keys[1], (n,)) > initial_cond_dens / initial_bound
 
-    out_tup = while_loop(lambda tup: jnp.logical_and(tup[0].sum() > 0, tup[-1] < maximum_rejections),
+    out_tup = while_loop(lambda tup: jnp.logical_and(tup[0].sum() > 0, tup[-2] < maximum_rejections),
                          lambda tup: rejection_proposal_all(ssm_scenario, x0_all, t, x1_all, tplus1, x0_log_weight,
                                                             bound_inflation, *tup),
                          (initial_not_yet_accepted_arr,
