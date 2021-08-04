@@ -50,7 +50,7 @@ class cdict:
 
         out_cdict = self.copy()
         for key, attr in out_cdict.__dict__.items():
-            if (isinstance(attr, jnp.ndarray) and attr.ndim > 0)\
+            if (isinstance(attr, jnp.ndarray) and attr.ndim > 0) \
                     or (isinstance(attr, cdict) and not isinstance(attr, static_cdict)):
                 out_cdict.__setattr__(key, attr[item])
         return out_cdict
@@ -61,13 +61,16 @@ class cdict:
         if other is None:
             return out_cdict
         for key, attr in out_cdict.__dict__.items():
-            if hasattr(other, key) and (isinstance(attr, jnp.ndarray) or isinstance(getattr(other, key), jnp.ndarray)):
+            if hasattr(other, key):
                 attr_atl = attr
                 other_attr_atl = other.__dict__[key]
-                out_cdict.__setattr__(key, jnp.append(jnp.atleast_1d(attr_atl),
-                                                      jnp.atleast_1d(other_attr_atl), axis=0))
-        if hasattr(self, 'time') and hasattr(other, 'time'):
-            out_cdict.time = self.time + other.time
+                if (isinstance(attr, jnp.ndarray) or isinstance(getattr(other, key), jnp.ndarray)):
+                    out_cdict.__setattr__(key, jnp.append(jnp.atleast_1d(attr_atl),
+                                                          jnp.atleast_1d(other_attr_atl), axis=0))
+                elif ((isinstance(attr, cdict) and not isinstance(attr, static_cdict)) \
+                      and isinstance(other_attr_atl, cdict) and not isinstance(other_attr_atl, static_cdict)) \
+                        or key == 'time':
+                    out_cdict.__setattr__(key, attr_atl + other_attr_atl)
         return out_cdict
 
     @property
@@ -172,55 +175,58 @@ class Scenario:
                 clean_1d(self, 'prior_potential')
                 clean_1d(self, 'likelihood_potential')
 
-            if is_implemented(self.likelihood_potential):
-                if not is_implemented(self.prior_potential):
-                    warn(f'{self.name} prior_potential not initiated, assuming uniform')
-                    self.prior_potential = lambda x, random_key=None: 0.
+            if not is_implemented(self.likelihood_potential) and is_implemented(self.potential):
+                self.prior_potential = lambda x, rk=None: 0.
+                self.likelihood_potential = self.potential
 
-                if not hasattr(self, 'temperature'):
-                    self.temperature = 1.
+            if not hasattr(self, 'temperature'):
+                self.temperature = 1.
 
-                self.tempered_potential \
-                    = lambda x, temperature, random_key=None: self.prior_potential(x, random_key) \
-                                                              + temperature * self.likelihood_potential(x, random_key)
+            if not is_implemented(self.prior_potential):
+                warn(f'{self.name} prior_potential not initiated, assuming uniform')
+                self.prior_potential = lambda x, random_key=None: 0.
 
-                self.potential = lambda x, random_key=None: self.tempered_potential(x, self.temperature, random_key)
+            self.tempered_potential \
+                = lambda x, temperature, random_key=None: self.prior_potential(x, random_key) \
+                                                          + temperature * self.likelihood_potential(x, random_key)
+
+            self.potential = lambda x, random_key=None: self.tempered_potential(x, self.temperature, random_key)
 
         if init_grad:
             self.init_grad()
 
+    def __setattr__(self, key, value):
+        self.__dict__[key] = value
+        if key in ('potential', 'prior_potential', 'likelihood_potential') and hasattr(self, 'grad_potential'):
+            self.init_grad()
+
     def init_grad(self):
-        if is_implemented(self.likelihood_potential):
-            self.grad_prior_potential = grad(self.prior_potential)
-            self.prior_potential_and_grad = value_and_grad(self.prior_potential)
+        self.grad_prior_potential = grad(self.prior_potential)
+        self.prior_potential_and_grad = value_and_grad(self.prior_potential)
 
-            self.grad_likelihood_potential = grad(self.likelihood_potential)
-            self.likelihood_potential_and_grad = value_and_grad(self.likelihood_potential)
+        self.grad_likelihood_potential = grad(self.likelihood_potential)
+        self.likelihood_potential_and_grad = value_and_grad(self.likelihood_potential)
 
-            self.grad_tempered_potential \
-                = lambda x, temperature, random_key=None: self.grad_prior_potential(x, random_key) \
-                                                          + temperature * self.grad_likelihood_potential(x, random_key)
+        self.grad_tempered_potential \
+            = lambda x, temperature, random_key=None: self.grad_prior_potential(x, random_key) \
+                                                      + temperature * self.grad_likelihood_potential(x, random_key)
 
-            def tempered_potential_and_grad(x: jnp.ndarray,
-                                            temperature: float,
-                                            random_key: jnp.ndarray) -> Tuple[float, jnp.ndarray]:
-                prior_pot, prior_grad = self.prior_potential_and_grad(x, random_key)
-                lik_pot, lik_grad = self.likelihood_potential_and_grad(x, random_key)
-                return prior_pot + temperature * lik_pot, \
-                       prior_grad + temperature * lik_grad
+        def tempered_potential_and_grad(x: jnp.ndarray,
+                                        temperature: float,
+                                        random_key: jnp.ndarray) -> Tuple[float, jnp.ndarray]:
+            prior_pot, prior_grad = self.prior_potential_and_grad(x, random_key)
+            lik_pot, lik_grad = self.likelihood_potential_and_grad(x, random_key)
+            return prior_pot + temperature * lik_pot, \
+                   prior_grad + temperature * lik_grad
 
-            self.tempered_potential_and_grad = tempered_potential_and_grad
+        self.tempered_potential_and_grad = tempered_potential_and_grad
 
-            self.grad_potential = lambda x, random_key=None: self.grad_tempered_potential(x,
-                                                                                          self.temperature,
-                                                                                          random_key)
-            self.potential_and_grad = lambda x, random_key=None: self.tempered_potential_and_grad(x,
-                                                                                                  self.temperature,
-                                                                                                  random_key)
-
-        elif is_implemented(self.potential):
-            self.grad_potential = grad(self.potential)
-            self.potential_and_grad = value_and_grad(self.potential)
+        self.grad_potential = lambda x, random_key=None: self.grad_tempered_potential(x,
+                                                                                      self.temperature,
+                                                                                      random_key)
+        self.potential_and_grad = lambda x, random_key=None: self.tempered_potential_and_grad(x,
+                                                                                              self.temperature,
+                                                                                              random_key)
 
     def __repr__(self):
         return f"mocat.Scenario.{self.__class__.__name__}({self.__dict__.__repr__()})"

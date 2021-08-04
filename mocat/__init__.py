@@ -1,6 +1,5 @@
 
 from mocat import utils
-from mocat import mcmc
 from mocat import kernels
 from mocat import scenarios
 from mocat import twodim
@@ -27,17 +26,21 @@ from mocat.src.mcmc.metropolis import Metropolis
 from mocat.src.mcmc.metropolis import RMMetropolis
 
 from mocat.src.mcmc.standard_mcmc import RandomWalk
-from mocat.src.mcmc.standard_mcmc import Overdamped
-from mocat.src.mcmc.standard_mcmc import HMC
 from mocat.src.mcmc.standard_mcmc import Underdamped
+from mocat.src.mcmc.qn_underdamped import QNUnderdamped
 
 from mocat.src.transport.sampler import TransportSampler
 
 from mocat.src.transport.smc import SMCSampler
 from mocat.src.transport.smc import TemperedSMCSampler
 from mocat.src.transport.smc import MetropolisedSMCSampler
+from mocat.src.transport.smc import RMMetropolisedSMCSampler
 
 from mocat.src.transport.svgd import SVGD
+
+from mocat.src.transport.teki import TemperedEKI
+from mocat.src.transport.teki import AdaptiveTemperedEKI
+
 
 from mocat.src.metrics import autocorrelation
 from mocat.src.metrics import integrated_autocorrelation_time

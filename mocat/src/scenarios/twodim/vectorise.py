@@ -125,7 +125,10 @@ class TwoDimToyScenario(Scenario):
         return 0.
 
     def _vectorise(self):
-        self.vec_potential = _flex_vectorise(self.potential)
+        self.vec_prior_potential = _flex_vectorise(self.prior_potential)
+        self.vec_likelihood_potential = _flex_vectorise(self.likelihood_potential)
+        self.vec_potential = lambda x, rk = None: self.vec_prior_potential(x, rk)\
+                                   + self.temperature * self.vec_likelihood_potential(x, rk)
         self.vec_dens = lambda x, rk = None: jnp.exp(-self.vec_potential(x, rk))
 
     def auto_axes_lims(self, vectorise=True):

@@ -14,7 +14,7 @@ from mocat.src.ssm.ssm import StateSpaceModel
 
 
 class LinearGaussian(StateSpaceModel):
-    name = 'Linear TemporalGaussian'
+    name = 'Linear Gaussian'
 
     # x_{t_new} ~ N(F_{t_new} @ x_{t_previous}, Q_{t_new})
     # y_t ~ N(H_t @ x_t, R_t)
@@ -48,7 +48,7 @@ class LinearGaussian(StateSpaceModel):
                        random_key: jnp.ndarray) -> Union[float, jnp.ndarray]:
         init_mean = self.get_initial_mean(t)
         init_cov_sqrt = self.get_initial_covariance_sqrt(t)
-        return random.normal(random_key, shape=(self.dim,)) @ init_cov_sqrt.T + init_mean
+        return init_cov_sqrt @ random.normal(random_key, shape=(self.dim,)) + init_mean
 
     def get_transition_matrix(self,
                               t_previous: float,
@@ -79,7 +79,7 @@ class LinearGaussian(StateSpaceModel):
         transition_prec_sqrt = self.get_transition_precision_sqrt(t_previous, t_new)
         transition_prec_det = self.get_transition_precision_det(t_previous, t_new)
         return gaussian_potential(x_new,
-                                  x_previous @ transition_mat.T,
+                                  transition_mat @ x_previous,
                                   sqrt_prec=transition_prec_sqrt,
                                   det_prec=transition_prec_det)
 
@@ -90,8 +90,8 @@ class LinearGaussian(StateSpaceModel):
                           random_key: jnp.ndarray) -> jnp.ndarray:
         transition_mat = self.get_transition_matrix(t_previous, t_new)
         transition_cov_sqrt = self.get_transition_covariance_sqrt(t_previous, t_new)
-        return (x_previous @ transition_mat.T
-                + random.normal(random_key, shape=x_previous.shape) @ transition_cov_sqrt.T).reshape(x_previous.shape)
+        return (transition_mat @ x_previous
+                + transition_cov_sqrt @ random.normal(random_key, shape=x_previous.shape)).reshape(x_previous.shape)
 
     def get_likelihood_matrix(self,
                               t: float) -> jnp.ndarray:
@@ -113,7 +113,7 @@ class LinearGaussian(StateSpaceModel):
                             x_previous: jnp.ndarray,
                             t_previous: float,
                             t_new: float) -> jnp.ndarray:
-        return x_previous @ self.get_transition_matrix(t_previous, t_new).T
+        return self.get_transition_matrix(t_previous, t_new) @ x_previous
 
     def likelihood_potential(self,
                              x: jnp.ndarray,
@@ -123,7 +123,7 @@ class LinearGaussian(StateSpaceModel):
         likelihood_prec_sqrt = self.get_likelihood_precision_sqrt(t)
         likelihood_prec_det = self.get_likelihood_precision_det(t)
         return gaussian_potential(y,
-                                  x @ likelihood_mat.T,
+                                  likelihood_mat @ x,
                                   sqrt_prec=likelihood_prec_sqrt,
                                   det_prec=likelihood_prec_det)
 
@@ -136,12 +136,11 @@ class LinearGaussian(StateSpaceModel):
 
         rand_shape = list(x.shape)
         rand_shape[-1] = likelihood_cov_sqrt.shape[0]
-        return (x @ likelihood_mat.T
-                + random.normal(random_key, shape=rand_shape) @ likelihood_cov_sqrt.T).reshape(x.shape)
+        return likelihood_mat @ x + likelihood_cov_sqrt @ random.normal(random_key, shape=rand_shape)
 
 
 class TimeHomogenousLinearGaussian(LinearGaussian):
-    name = 'Time-homogenous Linear TemporalGaussian'
+    name = 'Time-homogenous Linear Gaussian'
 
     # x_{t_new} ~ N(F @ x_{t_previous}, Q)
     # y_t ~ N(H @ x_t, R)

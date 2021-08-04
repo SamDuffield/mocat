@@ -15,6 +15,8 @@ from mocat.src.utils import bfgs_sqrt_det
 from mocat.src.utils import l2_distance_matrix
 from mocat.src.utils import gc_matrix
 
+from mocat.src.mcmc.qn_underdamped import bfgs_leapfrog
+
 from mocat.src.core import impl_checkable
 from mocat.src.core import is_implemented
 

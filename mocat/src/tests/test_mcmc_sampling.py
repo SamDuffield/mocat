@@ -94,44 +94,6 @@ class TestRandomWalkCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
         self._test_ess_autocorrelation(self.warmstart_sample)
 
 
-class TestOverdampedCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
-    sampler = standard_mcmc.Overdamped()
-
-    def test_mean(self):
-        self._test_mean(self.adapt_sample)
-        self._test_mean(self.warmstart_sample)
-
-    def test_cov(self):
-        self._test_cov(self.adapt_sample)
-        self._test_cov(self.warmstart_sample)
-
-    def test_acceptance_rate(self):
-        self._test_acceptance_rate(self.warmstart_sample)
-
-    def test_ess_autocorrelation(self):
-        self._test_ess_autocorrelation(self.adapt_sample)
-        self._test_ess_autocorrelation(self.warmstart_sample)
-
-
-class TestHMCCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
-    sampler = standard_mcmc.HMC(leapfrog_steps=3)
-
-    def test_mean(self):
-        self._test_mean(self.adapt_sample)
-        self._test_mean(self.warmstart_sample)
-
-    def test_cov(self):
-        self._test_cov(self.adapt_sample)
-        self._test_cov(self.warmstart_sample)
-
-    def test_acceptance_rate(self):
-        self._test_acceptance_rate(self.warmstart_sample)
-
-    def test_ess_autocorrelation(self):
-        self._test_ess_autocorrelation(self.adapt_sample)
-        self._test_ess_autocorrelation(self.warmstart_sample)
-
-
 class TestUnderdampedCorrelatedGaussian(TestMetropolisCorrelatedGaussian):
     sampler = standard_mcmc.Underdamped(leapfrog_steps=3,
                                         friction=1.)

@@ -5,7 +5,7 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from typing import Union, Any
+from typing import Union, Any, Callable
 
 import jax.numpy as jnp
 from jax import vmap, jit
@@ -20,6 +20,7 @@ class Gaussian(Scenario):
     covariance_sqrt: jnp.ndarray
     precision_sqrt: jnp.ndarray
     precision_det: float
+    precision_mul: Callable[[jnp.ndarray, jnp.ndarray], jnp.ndarray]
 
     def __init__(self,
                  dim: int = 1,
@@ -33,14 +34,14 @@ class Gaussian(Scenario):
         else:
             self.dim = dim
         self.mean = jnp.zeros(dim) if mean is None else mean
-        self.covariance = jnp.eye(dim) if covariance is None else covariance
+        self.covariance = jnp.ones(dim) if covariance is None else covariance
         super().__init__(**kwargs)
 
     def likelihood_potential(self,
                              x: jnp.ndarray,
                              random_key: jnp.ndarray = None) -> Union[float, jnp.ndarray]:
-        x_diff = (x - self.mean) @ self.precision_sqrt.T
-        return 0.5 * jnp.sum(jnp.square(x_diff), axis=-1)
+        x_diff = self.precision_mul(x - self.mean, self.precision_sqrt.T)
+        return 0.5 * jnp.square(x_diff).sum(axis=-1)
 
     def __setattr__(self,
                     key: str,

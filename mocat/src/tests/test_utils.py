@@ -123,6 +123,10 @@ class TestLeapfrog(unittest.TestCase):
     leapfrog_steps = 3
 
     start_state = cdict(value=jnp.zeros(2),
+                        prior_potential=jnp.array(0.),
+                        grad_prior_potential=jnp.array([0., 0.]),
+                        likelihood_potential=jnp.array(0.),
+                        grad_likelihood_potential=jnp.array([1., 2.]),
                         potential=jnp.array(0.),
                         grad_potential=jnp.array([1., 2.]),
                         momenta=jnp.ones(2),
@@ -131,7 +135,8 @@ class TestLeapfrog(unittest.TestCase):
                         auxiliary_2darray=jnp.zeros(2))
 
     def test_leapfrog(self):
-        full_state = utils.leapfrog(lambda x, _: (0., x),
+        full_state = utils.leapfrog(lambda x, _: (0., jnp.zeros(2)),
+                                    lambda x, _: (0., x),
                                     self.start_state,
                                     self.stepsize,
                                     random.split(random.PRNGKey(0), self.leapfrog_steps))
@@ -142,7 +147,8 @@ class TestLeapfrog(unittest.TestCase):
         npt.assert_array_equal(out_state.momenta, jnp.array([0.9075344, 0.8597696]))
 
     def test_all_leapfrog(self):
-        full_state = utils.leapfrog(lambda x, _: (0., x),
+        full_state = utils.leapfrog(lambda x, _: (0., jnp.zeros(2)),
+                                    lambda x, _: (0., x),
                                     self.start_state,
                                     self.stepsize,
                                     random.split(random.PRNGKey(0), self.leapfrog_steps))
@@ -197,7 +203,7 @@ class TestBFGS(unittest.TestCase):
 
     grad_gauss_pot = lambda h, x: h @ x
 
-    vals = random.normal(random.PRNGKey(0), shape=(100, 2))
+    vals = random.normal(random.PRNGKey(0), shape=(10, 2))
     grads = vmap(grad_gauss_pot, in_axes=(None, 0))(hess, vals)
 
     def test_not_pd(self):
@@ -244,7 +250,7 @@ class TestBFGS(unittest.TestCase):
         init_hessian_sqrt_diag = jnp.diag(self.hess_sqrt)
         # init_hessian_sqrt_diag = jnp.ones(2) * 0.1
 
-        ps, qs, us, ts = utils.bfgs_sqrt_pqut(self.vals, self.grads, init_hessian_sqrt_diag, force_pd=True)
+        ps, qs, us, ts = utils.bfgs_sqrt_pqut(self.vals, self.grads, init_hessian_sqrt_diag, r=0.5)
 
         # Test transpose prod
         hess_inv_sqrt_t_z = utils.bfgs_sqrt_transpose_prod(ps, qs, z, 1/init_hessian_sqrt_diag)

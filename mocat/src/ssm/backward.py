@@ -299,8 +299,8 @@ def forward_filtering_backward_simulation(ssm_scenario: StateSpaceModel,
 
     bsi_samps = backward_simulation(ssm_scenario,
                                     pf_samps,
-                                    n_samps,
                                     bsi_key,
+                                    n_samps,
                                     maximum_rejections,
                                     transition_dens_bound_parameter,
                                     bound_inflation)

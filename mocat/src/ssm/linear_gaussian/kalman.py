@@ -7,7 +7,7 @@
 
 from typing import Tuple
 
-from jax import numpy as jnp, vmap
+from jax import numpy as jnp
 from jax.lax import scan
 
 from mocat.src.ssm.linear_gaussian.linear_gaussian import LinearGaussian

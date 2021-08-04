@@ -53,15 +53,16 @@ def gaussian_potential(x: jnp.ndarray,
                        sqrt_prec: Union[float, jnp.ndarray] = None,
                        det_prec: float = None) -> Union[float, jnp.ndarray]:
     # sqrt_prec such that prec = sqrt_prec @ sqrt_prec.T
+    x = jnp.atleast_1d(x)
     d = x.shape[-1]
 
     if prec is None and sqrt_prec is None:
         prec = 1.
 
-    if isinstance(prec, float):
+    if isinstance(prec, float) or (prec is not None and prec.ndim == 0):
         prec = jnp.ones(d) * prec
 
-    if isinstance(sqrt_prec, float):
+    if isinstance(sqrt_prec, float) or (sqrt_prec is not None and sqrt_prec.ndim == 0):
         sqrt_prec = jnp.ones(d) * sqrt_prec
 
     if det_prec is None:
@@ -105,11 +106,13 @@ def gaussian_potential(x: jnp.ndarray,
     return out_val + neg_log_z
 
 
-@partial(jit, static_argnums=(0,))
-def leapfrog(potential_and_grad: Callable,
-             state: cdict,
-             stepsize: float,
-             random_keys: jnp.ndarray) -> cdict:
+@partial(jit, static_argnums=(0, 1))
+def _leapfrog(prior_potential_and_grad: Callable,
+              likelihood_potential_and_grad: Callable,
+              state: cdict,
+              stepsize: float,
+              random_keys: jnp.ndarray,
+              temperature: float) -> cdict:
     leapfrog_steps = len(random_keys)
 
     def leapfrog_step(init_state: cdict,
@@ -117,9 +120,17 @@ def leapfrog(potential_and_grad: Callable,
         new_state = init_state.copy()
 
         p_half = init_state.momenta - stepsize / 2. * init_state.grad_potential
+
         new_state.value = init_state.value + stepsize * p_half
 
-        new_state.potential, new_state.grad_potential = potential_and_grad(new_state.value, random_keys[i])
+        new_state.prior_potential, new_state.grad_prior_potential \
+            = prior_potential_and_grad(new_state.value, random_keys[i])
+
+        new_state.likelihood_potential, new_state.grad_likelihood_potential \
+            = likelihood_potential_and_grad(new_state.value, random_keys[i])
+
+        new_state.potential = new_state.prior_potential + temperature * new_state.likelihood_potential
+        new_state.grad_potential = new_state.grad_prior_potential + temperature * new_state.grad_likelihood_potential
 
         new_state.momenta = p_half - stepsize / 2. * new_state.grad_potential
 
@@ -134,6 +145,16 @@ def leapfrog(potential_and_grad: Callable,
     all_leapfrog = state[jnp.newaxis] + all_leapfrog
 
     return all_leapfrog
+
+
+def leapfrog(prior_potential_and_grad: Callable,
+             likelihood_potential_and_grad: Callable,
+             state: cdict,
+             stepsize: float,
+             random_keys: jnp.ndarray,
+             temperature: float = 1.) -> cdict:
+    return _leapfrog(prior_potential_and_grad, likelihood_potential_and_grad,
+                     state, stepsize, random_keys, temperature)
 
 
 @partial(jit, static_argnums=(0, 1, 3))
@@ -233,30 +254,106 @@ def reset_covariance(obj: Any,
         setattr(obj, key + '_sqrt', sqrt_val)
         setattr(obj, prec_key + '_sqrt', 1 / sqrt_val)
         setattr(obj, prec_key + '_det', 1 / value)
+        setattr(obj, prec_key + '_mul', lambda a, b: a * b)
     else:
         sqrt_mat = jnp.linalg.cholesky(value)
         setattr(obj, key + '_sqrt', sqrt_mat)
         setattr(obj, prec_key + '_sqrt', jnp.linalg.inv(sqrt_mat))
         setattr(obj, prec_key + '_det', 1 / jnp.linalg.det(value))
+        setattr(obj, prec_key + '_mul', lambda a, b: a @ b)
+
+
+# @jit
+# def _bfgs_sqrt_pqut(vals: jnp.ndarray,
+#                     grads: jnp.ndarray,
+#                     init_hessian_sqrt_diag: jnp.ndarray,
+#                     r: float,
+#                     update_bools: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+#     s = vals[1:] - vals[:-1]
+#     y = grads[1:] - grads[:-1]
+#
+#     m, d = s.shape
+#
+#     update_bools = jnp.ones(m) * update_bools
+#
+#     def body_fun(val, i):
+#         us, ts = val
+#         sit_yi = jnp.dot(s[i], y[i])
+#         sit_si = jnp.dot(s[i], s[i])
+#         sit_Binit_si = jnp.square(s[i] * init_hessian_sqrt_diag).sum()
+#         #
+#         # thetai = (1 - r) * sit_si / \
+#         #          (sit_Binit_si - jnp.dot(init_hessian_sqrt_diag * s[i], init_hessian_sqrt_diag * y[i]))
+#         thetai = (sit_si - r * sit_Binit_si) / (sit_si - sit_yi)
+#         ybar_i = jnp.where(sit_yi < (r * sit_Binit_si), thetai * y[i] + (1 - thetai) * s[i], y[i])
+#         sit_yi = jnp.dot(s[i], ybar_i)
+#
+#         Ct_si = _bfgs_sqrt_transpose_prod(us, ts, s[i], init_hessian_sqrt_diag)
+#         B_si = _bfgs_sqrt_prod(us, ts, Ct_si, init_hessian_sqrt_diag)
+#         sit_B_si = jnp.dot(s[i], B_si)
+#
+#         min_denoms = jnp.minimum(jnp.abs(sit_B_si), jnp.abs(sit_yi))
+#         update_bool = jnp.logical_or(r == -jnp.inf, sit_yi > 0)
+#         update_bool = jnp.logical_and(min_denoms > 1e-10, update_bool)
+#         update_bool = jnp.logical_and(update_bools[i], update_bool)
+#
+#         p = jnp.where(update_bool, s[i] / sit_yi, jnp.zeros(d))
+#         q = jnp.where(update_bool, jnp.sqrt(sit_yi / sit_B_si) * B_si + ybar_i, jnp.zeros(d))
+#         u = jnp.where(update_bool, jnp.sqrt(sit_B_si / sit_yi) * ybar_i + B_si, jnp.zeros(d))
+#         t = jnp.where(update_bool, s[i] / sit_B_si, jnp.zeros(d))
+#         return (index_update(us, i, u), index_update(ts, i, t)), (p, q, u, t)
+#
+#     return scan(body_fun, (jnp.zeros((m, d)), jnp.zeros((m, d))), jnp.arange(m))[1]
+#
+#
+# def bfgs_sqrt_pqut(vals: jnp.ndarray,
+#                    grads: jnp.ndarray,
+#                    init_hessian_sqrt_diag: jnp.ndarray = 1.,
+#                    r: float = -jnp.inf,
+#                    update_bools: jnp.ndarray = 1) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+#     # Uses ps, qs for Hessian inverse approximation and us, ts for Hessian approximation
+#     # 0 < r < 1 enforces positive definiteness
+#     return _bfgs_sqrt_pqut(vals, grads, init_hessian_sqrt_diag, r, update_bools)
 
 
 @jit
 def _bfgs_sqrt_pqut(vals: jnp.ndarray,
                     grads: jnp.ndarray,
                     init_hessian_sqrt_diag: jnp.ndarray,
-                    force_pd: bool) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+                    r: float,
+                    update_bools: jnp.ndarray) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     s = vals[1:] - vals[:-1]
     y = grads[1:] - grads[:-1]
 
+    sit_Binit_si_all = jnp.square(s * init_hessian_sqrt_diag).sum(-1)
+    sty = (s * y).sum(-1)
+    rats = jnp.where(sit_Binit_si_all < 1e-10, -jnp.inf, -sty/sit_Binit_si_all)
+    lambd = jnp.maximum(0., rats.max() + r)
+    lambd = lambd * init_hessian_sqrt_diag ** 2
+
+    y = y + lambd * s
+
     m, d = s.shape
+
+    update_bools = jnp.ones(m) * update_bools
 
     def body_fun(val, i):
         us, ts = val
         sit_yi = jnp.dot(s[i], y[i])
-        update_bool = jnp.logical_or(sit_yi > 0, ~force_pd)
-        Ct_si = bfgs_sqrt_transpose_prod(us, ts, s[i], init_hessian_sqrt_diag)
-        B_si = bfgs_sqrt_prod(us, ts, Ct_si, init_hessian_sqrt_diag)
+        sit_si = jnp.dot(s[i], s[i])
+        sit_Binit_si = jnp.square(s[i] * init_hessian_sqrt_diag).sum()
+
+        sit_yi = jnp.dot(s[i], y[i])
+
+        Ct_si = _bfgs_sqrt_transpose_prod(us, ts, s[i], init_hessian_sqrt_diag)
+        B_si = _bfgs_sqrt_prod(us, ts, Ct_si, init_hessian_sqrt_diag)
         sit_B_si = jnp.dot(s[i], B_si)
+
+        min_denoms = jnp.minimum(jnp.abs(sit_B_si), jnp.abs(sit_yi))
+        update_bool = jnp.logical_or(r == -jnp.inf, sit_yi > 0)
+        update_bool = jnp.logical_and(min_denoms > 1e-10, update_bool)
+        update_bool = jnp.logical_and(update_bools[i], update_bool)
+
         p = jnp.where(update_bool, s[i] / sit_yi, jnp.zeros(d))
         q = jnp.where(update_bool, jnp.sqrt(sit_yi / sit_B_si) * B_si + y[i], jnp.zeros(d))
         u = jnp.where(update_bool, jnp.sqrt(sit_B_si / sit_yi) * y[i] + B_si, jnp.zeros(d))
@@ -268,39 +365,61 @@ def _bfgs_sqrt_pqut(vals: jnp.ndarray,
 
 def bfgs_sqrt_pqut(vals: jnp.ndarray,
                    grads: jnp.ndarray,
-                   init_hessian_sqrt_diag: jnp.ndarray,
-                   force_pd: bool = False) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
-    return _bfgs_sqrt_pqut(vals, grads, init_hessian_sqrt_diag, force_pd)
+                   init_hessian_sqrt_diag: jnp.ndarray = 1.,
+                   r: float = -jnp.inf,
+                   update_bools: jnp.ndarray = 1) -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+    # Uses ps, qs for Hessian inverse approximation and us, ts for Hessian approximation
+    # 0 < r enforces positive definiteness
+    return _bfgs_sqrt_pqut(vals, grads, init_hessian_sqrt_diag, r, update_bools)
 
 
 @jit
-def bfgs_sqrt_prod(ps: jnp.ndarray,
-                   qs: jnp.ndarray,
-                   z: jnp.ndarray,
-                   init_diag: jnp.ndarray) -> jnp.ndarray:
+def _bfgs_sqrt_prod(ps: jnp.ndarray,
+                    qs: jnp.ndarray,
+                    z: jnp.ndarray,
+                    init_diag: jnp.ndarray) -> jnp.ndarray:
     def body_fun(ci_z, i):
         return ci_z - ps[i] * jnp.dot(qs[i], ci_z), None
 
     return scan(body_fun, init_diag * z, jnp.arange(len(ps)))[0]
 
 
+def bfgs_sqrt_prod(ps: jnp.ndarray,
+                   qs: jnp.ndarray,
+                   z: jnp.ndarray,
+                   init_diag: jnp.ndarray = 1.) -> jnp.ndarray:
+    return _bfgs_sqrt_prod(ps, qs, z, init_diag)
+
+
 @jit
-def bfgs_sqrt_transpose_prod(ps: jnp.ndarray,
-                             qs: jnp.ndarray,
-                             z: jnp.ndarray,
-                             init_diag: jnp.ndarray) -> jnp.ndarray:
+def _bfgs_sqrt_transpose_prod(ps: jnp.ndarray,
+                              qs: jnp.ndarray,
+                              z: jnp.ndarray,
+                              init_diag: jnp.ndarray) -> jnp.ndarray:
     def body_fun(ci_z, i):
         return ci_z - qs[i] * jnp.dot(ps[i], ci_z), None
 
     return init_diag * scan(body_fun, z, jnp.arange(len(ps) - 1, -1, -1))[0]
 
+
+def bfgs_sqrt_transpose_prod(ps: jnp.ndarray,
+                             qs: jnp.ndarray,
+                             z: jnp.ndarray,
+                             init_diag: jnp.ndarray = 1.) -> jnp.ndarray:
+    return _bfgs_sqrt_transpose_prod(ps, qs, z, init_diag)
+
+
 @jit
-def bfgs_sqrt_det(ps: jnp.ndarray,
+def _bfgs_sqrt_det(ps: jnp.ndarray,
                    qs: jnp.ndarray,
                    init_diag: jnp.ndarray) -> jnp.ndarray:
-
     return jnp.prod(init_diag) * (1 - vmap(jnp.dot)(ps, qs)).prod()
 
+
+def bfgs_sqrt_det(ps: jnp.ndarray,
+                  qs: jnp.ndarray,
+                  init_diag: jnp.ndarray = 1.) -> jnp.ndarray:
+    return _bfgs_sqrt_det(ps, qs, init_diag)
 
 
 @jit

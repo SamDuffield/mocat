@@ -77,11 +77,11 @@ class MCMCSampler(Sampler):
                  reject_extra: cdict) -> Tuple[cdict, cdict]:
         raise NotImplementedError(f'{self.__class__.__name__} markov proposal not initiated')
 
-    def proposal_potential(self,
+    def forward_potential(self,
                            scenario: Scenario,
                            reject_state: cdict, reject_extra: cdict,
                            proposed_state: cdict, proposed_extra: cdict) -> Union[float, jnp.ndarray]:
-        raise AttributeError(f'{self.__class__.__name__} proposal_potential not initiated')
+        raise AttributeError(f'{self.__class__.__name__} forward_potential not initiated')
 
     def acceptance_probability(self,
                                scenario: Scenario,

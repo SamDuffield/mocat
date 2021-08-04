@@ -9,7 +9,7 @@
 import unittest
 from typing import Tuple
 
-from jax import numpy as jnp, random
+from jax import numpy as jnp, random, vmap
 import numpy.testing as npt
 
 from mocat.src.core import cdict
@@ -18,14 +18,14 @@ from mocat.src.scenarios.twodim import toy_examples
 from mocat.src.transport.smc import MetropolisedSMCSampler
 from mocat.src.transport.svgd import SVGD
 from mocat.src.kernels import median_bandwidth_update, mean_bandwidth_update
-from mocat.src.mcmc.standard_mcmc import RandomWalk, Overdamped
+from mocat.src.mcmc.standard_mcmc import RandomWalk, Underdamped
 
 
 class TestCorrelatedGaussian(unittest.TestCase):
-    scenario_cov = jnp.array([[1., 0.9], [0.9, 2.]])
-    scenario = toy_examples.Gaussian(covariance=scenario_cov)
-    scenario.prior_sample = lambda rk: random.uniform(rk, shape=(2,)) * 3
-    n = int(1e4)
+    scenario = toy_examples.Gaussian(covariance=jnp.array([[1., 0.9], [0.9, 2.]]))
+    scenario.prior_sample = lambda rk: (random.normal(rk, shape=(2,)) * 7.)
+    scenario.prior_potential = lambda x, rk: 0.5 * jnp.square(x / 7. ** 2).sum(-1)
+    posterior_covariance = jnp.linalg.inv(jnp.linalg.inv(scenario.covariance) + 1/7**2 * jnp.eye(2))
 
     def _test_mean(self,
                    sample: cdict):
@@ -34,7 +34,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
         else:
             val = sample.value
         samp_mean = val.mean(axis=0)
-        npt.assert_array_almost_equal(samp_mean, jnp.zeros(2), decimal=1)
+        npt.assert_array_almost_equal(samp_mean, jnp.zeros(2), decimal=0)
 
     def _test_cov(self,
                   sample: cdict):
@@ -43,7 +43,22 @@ class TestCorrelatedGaussian(unittest.TestCase):
         else:
             val = sample.value
         samp_cov = jnp.cov(val.T)
-        npt.assert_array_almost_equal(samp_cov, self.scenario_cov, decimal=0.5)
+        npt.assert_array_almost_equal(samp_cov, self.posterior_covariance, decimal=0.5)
+
+    def _test_log_norm_const(self,
+                             sample):
+        lik_prec = jnp.linalg.inv(self.scenario.covariance)
+        tempered_covs = vmap(lambda t: jnp.linalg.inv(lik_prec * t + jnp.eye(2) / 7 ** 2))(sample.temperature)
+        tempered_dets = vmap(jnp.linalg.det)(tempered_covs)
+
+        npt.assert_array_almost_equal(sample.log_norm_constant, 0.5 * (jnp.log(tempered_dets) - 4 *jnp.log(7)), 0)
+
+    def resample_final(self,
+                       sample: cdict) -> cdict:
+        unweighted_vals = sample.value[-1, random.categorical(random.PRNGKey(1),
+                                                              logits=sample.log_weight[-1], shape=(self.n,))]
+        unweighted_sample = cdict(value=unweighted_vals)
+        return unweighted_sample
 
 
 class TestSVGD(TestCorrelatedGaussian):
@@ -110,13 +125,7 @@ class TestSVGD(TestCorrelatedGaussian):
 
 class TestMetropolisedSMC(TestCorrelatedGaussian):
     preschedule = jnp.arange(0., 1.1, 0.1)
-
-    def resample_final(self,
-                       sample: cdict) -> cdict:
-        unweighted_vals = sample.value[-1, random.categorical(random.PRNGKey(1),
-                                                              logits=sample.log_weight[-1], shape=(self.n,))]
-        unweighted_sample = cdict(value=unweighted_vals)
-        return unweighted_sample
+    n = int(1e4)
 
     def test_tempered_preschedule_RW(self):
         sample = run(self.scenario, MetropolisedSMCSampler(RandomWalk(stepsize=1.0)),
@@ -126,35 +135,37 @@ class TestMetropolisedSMC(TestCorrelatedGaussian):
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)
+        self._test_log_norm_const(sample)
         npt.assert_array_equal(sample.temperature, self.preschedule[1:])
 
-    def test_tempered_preschedule_OD(self):
-        sample = run(self.scenario, MetropolisedSMCSampler(Overdamped(stepsize=1.0)),
+    def test_tempered_preschedule_UD(self):
+        sample = run(self.scenario, MetropolisedSMCSampler(Underdamped(stepsize=1.0)),
                      self.n,
                      random_key=random.PRNGKey(0),
                      temperature_schedule=self.preschedule)
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)
+        self._test_log_norm_const(sample)
         npt.assert_array_equal(sample.temperature, self.preschedule[1:])
 
     def test_tempered_adaptive_RW(self):
         sample = run(self.scenario, MetropolisedSMCSampler(RandomWalk(stepsize=1.0)),
                      self.n,
-                     random_key=random.PRNGKey(0),
-                     ess_threshold=0.9)
+                     random_key=random.PRNGKey(0))
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)
+        self._test_log_norm_const(sample)
 
-    def test_tempered_adaptive_OD(self):
-        sample = run(self.scenario, MetropolisedSMCSampler(Overdamped(stepsize=1.0)),
+    def test_tempered_adaptive_UD(self):
+        sample = run(self.scenario, MetropolisedSMCSampler(Underdamped(stepsize=1.0, leapfrog_steps=10)),
                      self.n,
-                     random_key=random.PRNGKey(0),
-                     ess_threshold=0.9)
+                     random_key=random.PRNGKey(0))
         unweighted_sample = self.resample_final(sample)
         self._test_mean(unweighted_sample)
         self._test_cov(unweighted_sample)
+        self._test_log_norm_const(sample)
 
 
 if __name__ == '__main__':

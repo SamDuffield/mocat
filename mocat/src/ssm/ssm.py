@@ -5,7 +5,6 @@
 # Web: https://github.com/SamDuffield/mocat
 ########################################################################################################################
 
-from functools import partial
 from typing import Union
 
 import jax.numpy as jnp

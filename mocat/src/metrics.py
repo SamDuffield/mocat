@@ -12,8 +12,6 @@ from functools import partial
 from decorator import decorator
 from jax import vmap, random, numpy as jnp
 from jax.scipy.special import logsumexp
-import \
-    numpy as np  # For np.fft.fft(vals, n_samps=n_samps) and np.unique(vals, axis=0) (JAX doesn't support as of writing)
 from matplotlib import pyplot as plt
 from matplotlib.figure import Figure
 
@@ -40,7 +38,7 @@ def autocorrelation(sample: Union[jnp.ndarray, cdict],
     vals = extract_1d_vals(sample)
     max_lag_eval = min(max_lag_eval, len(vals))
     n = _next_pow_two(max_lag_eval)
-    f = np.fft.fft(vals - jnp.mean(vals), n=2 * n)
+    f = jnp.fft.fft(vals - jnp.mean(vals), n=2 * n)
     acf = jnp.fft.ifft(f * jnp.conjugate(f))[:max_lag_eval].real
     return acf / acf[0]
 
