@@ -6,11 +6,8 @@ from scipy.interpolate import make_interp_spline
 import os
 from time import time
 
-plt.style.use('thesis')
-
 from mocat import ssm
 
-# fig_dir = 'simulations/images/linear_gaussian_1D'
 fig_dir = os.path.dirname(os.getcwd()) + '/images/linear_gaussian_1D'
 
 # Plot params

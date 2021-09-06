@@ -7,14 +7,10 @@ import os
 from time import time
 import pickle
 
-plt.style.use('thesis')
-
 import mocat
 from mocat import ssm
 
-# fig_dir = 'simulations/images/linear_gaussian_1D'
 fig_dir = os.path.dirname(os.getcwd()) + '/images/linear_gaussian_1D'
-
 
 # Use splines to smooth trajectories
 def smooth(t, x, k=3):

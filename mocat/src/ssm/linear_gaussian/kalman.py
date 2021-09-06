@@ -57,19 +57,18 @@ def run_kalman_filter_for_marginals(lgssm_scenario: LinearGaussian,
     return jnp.append(mu_0[jnp.newaxis], mus, 0), jnp.append(cov_0[jnp.newaxis], covs, 0)
 
 
-def run_kalman_smoother_for_marginals(lgssm_scenario: LinearGaussian,
-                                      y: jnp.ndarray,
-                                      t: jnp.ndarray,
-                                      filter_output: Tuple[jnp.ndarray, jnp.ndarray] = None)\
-        -> Tuple[jnp.ndarray, jnp.ndarray]:
-
+def run_kalman_smoother_for_marginals_and_lag_ones(lgssm_scenario: LinearGaussian,
+                                                   y: jnp.ndarray,
+                                                   t: jnp.ndarray,
+                                                   filter_output: Tuple[jnp.ndarray, jnp.ndarray] = None) \
+        -> Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
     if filter_output is None:
         filter_output = run_kalman_filter_for_marginals(lgssm_scenario, y, t)
 
     f_mus, f_covs = filter_output
 
     def body_fun(carry: Tuple[jnp.ndarray, jnp.ndarray],
-                 i: int) -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray]]:
+                 i: int) -> Tuple[Tuple[jnp.ndarray, jnp.ndarray], Tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]]:
         mu_tplus1, cov_tplus1 = carry
 
         t_mat = lgssm_scenario.get_transition_matrix(t[i], t[i + 1])
@@ -82,12 +81,24 @@ def run_kalman_smoother_for_marginals(lgssm_scenario: LinearGaussian,
         mu_t = f_mu_t + back_kal_gain @ (mu_tplus1 - t_mat @ f_mu_t)
         cov_t = f_cov_t + back_kal_gain @ (cov_tplus1 - t_mat @ f_cov_t @ t_mat.T - t_cov) @ back_kal_gain.T
 
-        return (mu_t, cov_t), (mu_t, cov_t)
+        e_xt_xtp1 = f_mu_t @ mu_tplus1.T + back_kal_gain @ (cov_tplus1 + (mu_tplus1 - f_mus[i + 1]) @ mu_tplus1.T)
 
-    _, (mus, covs) = scan(body_fun,
-                          (f_mus[-1], f_covs[-1]),
-                          jnp.arange(len(t) - 2, -1, -1))
+        return (mu_t, cov_t), (mu_t, cov_t, e_xt_xtp1)
 
-    return jnp.append(mus[::-1], f_mus[-1, jnp.newaxis], 0), jnp.append(covs[::-1], f_covs[-1, jnp.newaxis], 0)
+    _, (mus, covs, lag_one_covs) = scan(body_fun,
+                                        (f_mus[-1], f_covs[-1]),
+                                        jnp.arange(len(t) - 2, -1, -1))
 
+    return jnp.append(mus[::-1], f_mus[-1, jnp.newaxis], 0), \
+           jnp.append(covs[::-1], f_covs[-1, jnp.newaxis], 0), \
+           lag_one_covs[::-1]
+
+
+def run_kalman_smoother_for_marginals(lgssm_scenario: LinearGaussian,
+                                      y: jnp.ndarray,
+                                      t: jnp.ndarray,
+                                      filter_output: Tuple[jnp.ndarray, jnp.ndarray] = None) \
+        -> Tuple[jnp.ndarray, jnp.ndarray]:
+    mus, covs, _ = run_kalman_smoother_for_marginals_and_lag_ones(lgssm_scenario, y, t, filter_output)
+    return mus, covs
 
