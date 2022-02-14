@@ -8,7 +8,7 @@
 from typing import Tuple, Union, Callable
 
 from jax import numpy as jnp, vmap, random
-from jax.experimental.optimizers import adagrad
+from jax.example_libraries.optimizers import adagrad
 
 from mocat.src.core import Scenario, cdict, impl_checkable, is_implemented
 from mocat.src.transport.sampler import TransportSampler

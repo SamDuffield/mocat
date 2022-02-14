@@ -101,4 +101,3 @@ def run_kalman_smoother_for_marginals(lgssm_scenario: LinearGaussian,
         -> Tuple[jnp.ndarray, jnp.ndarray]:
     mus, covs, _ = run_kalman_smoother_for_marginals_and_lag_ones(lgssm_scenario, y, t, filter_output)
     return mus, covs
-
