@@ -176,7 +176,8 @@ class Scenario:
                 clean_1d(self, 'likelihood_potential')
 
             if not is_implemented(self.likelihood_potential) and is_implemented(self.potential):
-                self.prior_potential = lambda x, rk=None: 0.
+                if not is_implemented(self.prior_potential):
+                    self.prior_potential = lambda x, rk=None: jnp.array(0.)
                 self.likelihood_potential = self.potential
 
             if not hasattr(self, 'temperature'):
@@ -184,7 +185,7 @@ class Scenario:
 
             if not is_implemented(self.prior_potential):
                 warn(f'{self.name} prior_potential not initiated, assuming uniform')
-                self.prior_potential = lambda x, random_key=None: 0.
+                self.prior_potential = lambda x, random_key=None: jnp.array(0.)
 
             self.tempered_potential \
                 = lambda x, temperature, random_key=None: self.prior_potential(x, random_key) \

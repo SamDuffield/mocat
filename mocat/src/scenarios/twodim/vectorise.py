@@ -122,7 +122,7 @@ class TwoDimToyScenario(Scenario):
     def prior_potential(self,
                         x: jnp.ndarray,
                         random_key: jnp.ndarray = None) -> float:
-        return 0.
+        return jnp.zeros_like(jnp.array(x)[..., 0])
 
     def _vectorise(self):
         self.vec_prior_potential = _flex_vectorise(self.prior_potential)
