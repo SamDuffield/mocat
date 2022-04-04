@@ -11,7 +11,6 @@ from typing import Union, Tuple
 import jax.numpy as jnp
 from jax import random, vmap, jit
 from jax.lax import cond, scan
-from jax.ops import index_update
 
 from mocat.src.core import cdict
 from mocat.src.ssm.ssm import StateSpaceModel
@@ -210,11 +209,11 @@ def resample_particles(particles: cdict,
         out_particles.log_weight = jnp.zeros(n)
     elif resample_full:
         out_particles.value = _resample((particles.value, particles.log_weight[-1], random_key))
-        out_particles.log_weight = index_update(out_particles.log_weight, -1, jnp.zeros(n))
+        out_particles.log_weight = out_particles.log_weight.at[-1].set(jnp.zeros(n))
     else:
         latest_value = _resample((particles.value[-1], particles.log_weight[-1], random_key))
-        out_particles.value = index_update(out_particles.value, -1, latest_value)
-        out_particles.log_weight = index_update(out_particles.log_weight, -1, jnp.zeros(n))
+        out_particles.value = out_particles.value.at[-1].set(latest_value)
+        out_particles.log_weight = out_particles.log_weight.at[-1].set(jnp.zeros(n))
     return out_particles
 
 

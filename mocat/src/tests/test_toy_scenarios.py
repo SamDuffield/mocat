@@ -21,8 +21,8 @@ class Test1DGaussian(unittest.TestCase):
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 1)
         npt.assert_equal(self.scenario.mean.shape, (1,))
-        npt.assert_equal(self.scenario.covariance.shape, (1, 1))
-        npt.assert_equal(self.scenario.precision_sqrt.shape, (1, 1))
+        npt.assert_equal(self.scenario.covariance.shape, (1,))
+        npt.assert_equal(self.scenario.precision_sqrt.shape, (1,))
 
     def test_scalar_potential(self):
         npt.assert_array_equal(self.scenario.potential(0.), 0.)
@@ -44,8 +44,8 @@ class TestNDGaussian(unittest.TestCase):
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 10)
         npt.assert_equal(self.scenario.mean.shape, (10,))
-        npt.assert_equal(self.scenario.covariance.shape, (10, 10))
-        npt.assert_equal(self.scenario.precision_sqrt.shape, (10, 10))
+        npt.assert_equal(self.scenario.covariance.shape, (10,))
+        npt.assert_equal(self.scenario.precision_sqrt.shape, (10,))
 
     def test_array_potential(self):
         npt.assert_array_equal(self.scenario.potential(jnp.zeros(10)), 0.)

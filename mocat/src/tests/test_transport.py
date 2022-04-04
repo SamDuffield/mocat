@@ -22,6 +22,7 @@ from mocat.src.mcmc.standard_mcmc import RandomWalk, Underdamped
 
 
 class TestCorrelatedGaussian(unittest.TestCase):
+    n: int
     scenario = toy_examples.Gaussian(covariance=jnp.array([[1., 0.9], [0.9, 2.]]))
     scenario.prior_sample = lambda rk: (random.normal(rk, shape=(2,)) * 7.)
     scenario.prior_potential = lambda x, rk: 0.5 * jnp.square(x / 7. ** 2).sum(-1)
@@ -43,7 +44,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
         else:
             val = sample.value
         samp_cov = jnp.cov(val.T)
-        npt.assert_array_almost_equal(samp_cov, self.posterior_covariance, decimal=0.5)
+        npt.assert_array_almost_equal(samp_cov, self.posterior_covariance, decimal=1)
 
     def _test_log_norm_const(self,
                              sample):
@@ -51,7 +52,7 @@ class TestCorrelatedGaussian(unittest.TestCase):
         tempered_covs = vmap(lambda t: jnp.linalg.inv(lik_prec * t + jnp.eye(2) / 7 ** 2))(sample.temperature)
         tempered_dets = vmap(jnp.linalg.det)(tempered_covs)
 
-        npt.assert_array_almost_equal(sample.log_norm_constant, 0.5 * (jnp.log(tempered_dets) - 4 *jnp.log(7)), 0)
+        npt.assert_array_almost_equal(sample.log_norm_constant, 0.5 * (jnp.log(tempered_dets) - 4 * jnp.log(7)), 0)
 
     def resample_final(self,
                        sample: cdict) -> cdict:
@@ -66,13 +67,7 @@ class TestSVGD(TestCorrelatedGaussian):
     n_iter = int(1e3)
 
     def test_fixed_kernel_params(self):
-        class SVGD_fixed(SVGD):
-            def adapt(self,
-                      ensemble_state: cdict,
-                      ensemble_extra: cdict) -> Tuple[cdict, cdict]:
-                return ensemble_state, ensemble_extra
-
-        sample = run(self.scenario, SVGD_fixed(max_iter=self.n_iter, stepsize=0.8),
+        sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=0.8),
                      n=self.n,
                      random_key=random.PRNGKey(0))
         self._test_mean(sample[-1])
@@ -105,22 +100,22 @@ class TestSVGD(TestCorrelatedGaussian):
         sample = run(self.scenario, SVGD_mean(max_iter=self.n_iter, stepsize=1.0),
                      n=self.n,
                      random_key=random.PRNGKey(0))
-        self._test_mean(sample)
-        self._test_cov(sample)
+        self._test_mean(sample[-1])
+        self._test_cov(sample[-1])
 
     def test_callable_stepsize(self):
-        sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=lambda i: i ** -0.5),
+        sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=lambda i: 10 * i ** -0.5),
                      n=self.n,
                      random_key=random.PRNGKey(0))
-        self._test_mean(sample)
-        self._test_cov(sample)
+        self._test_mean(sample[-1])
+        self._test_cov(sample[-1])
 
     def test_ensemble_minibatch(self):
         sample = run(self.scenario, SVGD(max_iter=self.n_iter, stepsize=1.0, ensemble_batchsize=100),
-                     n=1000,
+                     n=self.n,
                      random_key=random.PRNGKey(0))
-        self._test_mean(sample)
-        self._test_cov(sample)
+        self._test_mean(sample[-1])
+        self._test_cov(sample[-1])
 
 
 class TestMetropolisedSMC(TestCorrelatedGaussian):

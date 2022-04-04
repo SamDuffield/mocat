@@ -11,7 +11,6 @@ from warnings import warn
 
 from jax import jit, numpy as jnp, vmap
 from jax.lax import scan, while_loop, cond
-from jax.ops import index_update
 from mocat.src.core import cdict
 
 
@@ -358,7 +357,7 @@ def _bfgs_sqrt_pqut(vals: jnp.ndarray,
         q = jnp.where(update_bool, jnp.sqrt(sit_yi / sit_B_si) * B_si + y[i], jnp.zeros(d))
         u = jnp.where(update_bool, jnp.sqrt(sit_B_si / sit_yi) * y[i] + B_si, jnp.zeros(d))
         t = jnp.where(update_bool, s[i] / sit_B_si, jnp.zeros(d))
-        return (index_update(us, i, u), index_update(ts, i, t)), (p, q, u, t)
+        return (us.at[i].set(u), ts.at[i].set(t)), (p, q, u, t)
 
     return scan(body_fun, (jnp.zeros((m, d)), jnp.zeros((m, d))), jnp.arange(m))[1]
 

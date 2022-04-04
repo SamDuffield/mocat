@@ -22,12 +22,12 @@ class TestGaussian(unittest.TestCase):
         npt.assert_array_equal(self.scenario.mean, jnp.zeros(2))
         npt.assert_array_equal(self.scenario.covariance, jnp.eye(2))
 
-    def test_vectorise(self):
-        self.scenario._vectorise()
-        npt.assert_array_equal(self.scenario.vec_potential(jnp.arange(6).reshape((3, 2))), jnp.array([0.5, 6.5, 20.5]))
-        npt.assert_array_equal(self.scenario.vec_potential(jnp.arange(8).reshape((2, 2, 2))),
-                               jnp.array([[0.5, 6.5],
-                                         [20.5, 42.5]]))
+    def test_vec_potential(self):
+        npt.assert_array_equal(self.scenario.vec_potential(jnp.array([0, 2, 4]),
+                                                           jnp.array([1, 3, 5])),
+                               jnp.array([[0.5, 2.5, 8.5],
+                                          [4.5, 6.5, 12.5],
+                                          [12.5, 14.5, 20.5]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
@@ -70,12 +70,11 @@ class TestBanana(unittest.TestCase):
         npt.assert_array_equal(self.scenario.grad_potential(jnp.arange(2, dtype='float32')), [0., -2.])
 
     def test_vec_potential(self):
-        self.scenario._vectorise()
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(6).reshape((3, 2))),
-                                      jnp.array([2., 0.0272, 3.1552]))
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(8).reshape((2, 2, 2))),
-                                      jnp.array([[2., 0.0272],
-                                                [3.1552, 13.0831995]]))
+        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.array([0, 2, 4]),
+                                                                  jnp.array([1, 3, 5])),
+                                      jnp.array([[2., 1.7872, 1.2352],
+                                                 [0., 0.0272, 0.1952],
+                                                 [2., 2.2672, 3.1552]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
@@ -108,12 +107,11 @@ class TestNealFunnel(unittest.TestCase):
                                       jnp.array([0., 0.333333]))
 
     def test_vec_potential(self):
-        self.scenario._vectorise()
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(6).reshape((3, 2))),
-                                      jnp.array([0.166667, 1.946260, 4.823346]))
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(8).reshape((2, 2, 2))),
-                                      jnp.array([[0.166666, 1.946260],
-                                                [4.823346, 8.71022]]))
+        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.array([0, 2, 4]),
+                                                                  jnp.array([1, 3, 5])),
+                                      jnp.array([[0.166667, 1.379728, 5.018912],
+                                                 [1.5, 1.94626, 3.285041],
+                                                 [4.166667, 4.330836, 4.823347]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
@@ -141,13 +139,12 @@ class TestGaussianMixture(unittest.TestCase):
         npt.assert_equal(self.scenario.precision_sqrts.ndim, 3)
         npt.assert_equal(self.scenario.precision_sqrts.shape[-1], 2)
 
-    def test_vectorise(self):
-        self.scenario._vectorise()
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(6).reshape((3, 2))),
-                                      jnp.array([5.0128746, 3.7238297, 9.724172]))
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(8).reshape((2, 2, 2))),
-                                      jnp.array([[5.0128746, 3.7238297],
-                                                [9.724172, 23.72417]]))
+    def test_vec_potential(self):
+        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.array([0, 2, 4]),
+                                                                  jnp.array([1, 3, 5])),
+                                      jnp.array([[5.012875, 3.705686, 5.706022],
+                                                 [5.031018, 3.72383, 5.724165],
+                                                 [9.031024, 7.723836, 9.724172]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
@@ -181,13 +178,12 @@ class TestDoubleWell(unittest.TestCase):
     def test_basic(self):
         npt.assert_equal(self.scenario.dim, 2)
 
-    def test_vectorise(self):
-        self.scenario._vectorise()
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(6).reshape((3, 2))),
-                                      jnp.array([-0.25, 17.75, 199.75]))
-        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.arange(8).reshape((2, 2, 2))),
-                                      jnp.array([[-0.25, 17.75],
-                                                [199.75, 881.75]]))
+    def test_vec_potential(self):
+        npt.assert_array_almost_equal(self.scenario.vec_potential(jnp.array([0, 2, 4]),
+                                                                  jnp.array([1, 3, 5])),
+                                      jnp.array([[-0.25, 1.75, 55.75],
+                                                 [15.75, 17.75, 71.75],
+                                                 [143.75, 145.75, 199.75]]))
 
     def test_auto_axes_lims(self):
         self.scenario.auto_axes_lims()
