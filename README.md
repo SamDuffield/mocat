@@ -152,7 +152,7 @@ class Underdamped(mocat.MCMCSampler):
 
 ## Cite
 ```
-@software{jax2018github,
+@software{mocat2021,
   author = {Samuel Duffield},
   title = {mocat: All things Monte Carlo, written in JAX.},
   url = {http://github.com/SamDuffield/mocat},
