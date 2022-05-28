@@ -150,5 +150,12 @@ class Underdamped(mocat.MCMCSampler):
         return jnp.minimum(1., pre_min_alpha)
 ```
 
-
-
+## Cite
+```
+@software{jax2018github,
+  author = {Samuel Duffield},
+  title = {mocat: All things Monte Carlo, written in JAX.},
+  url = {http://github.com/SamDuffield/mocat},
+  year = {2021},
+}
+```
