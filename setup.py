@@ -18,7 +18,7 @@ setup(
                       'decorator',
                       'numpy'],
     packages=find_namespace_packages(),
-    author_email='sddd2@cam.ac.uk',
+    author_email='s@mduffield.com',
     description='All things Monte Carlo, written in JAX',
     long_description=long_description,
     long_description_content_type='text/markdown',
