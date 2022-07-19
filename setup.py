@@ -19,7 +19,7 @@ setup(
                       'numpy'],
     packages=find_namespace_packages(),
     author_email='sddd2@cam.ac.uk',
-    description='Monte Carlo Testbed',
+    description='All things Monte Carlo, written in JAX',
     long_description=long_description,
     long_description_content_type='text/markdown',
     license='MIT'
