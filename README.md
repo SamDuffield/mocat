@@ -15,6 +15,10 @@ All things Monte Carlo, written in JAX.
   * Particle smoothing
   * Kalman filtering + smoothing
 
+
+`mocat` was developed alongside the thesis [Duffield (2021)](https://www.repository.cam.ac.uk/handle/1810/335667), a walkthrough of `mocat`'s core funcionality is found in [mocat.pdf](/mocat.pdf).
+
+
 ## Install
 ```
 pip install mocat

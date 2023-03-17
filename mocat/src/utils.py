@@ -422,6 +422,19 @@ def bfgs_sqrt_det(ps: jnp.ndarray,
 
 
 @jit
+def _bfgs_sqrt_log_abs_det(ps: jnp.ndarray,
+                   qs: jnp.ndarray,
+                   init_diag: jnp.ndarray) -> jnp.ndarray:
+    return jnp.log(jnp.abs(init_diag)).sum() + jnp.log(jnp.abs(1 - vmap(jnp.dot)(ps, qs))).sum()
+
+
+def bfgs_sqrt_log_abs_det(ps: jnp.ndarray,
+                  qs: jnp.ndarray,
+                  init_diag: jnp.ndarray = 1.) -> jnp.ndarray:
+    return _bfgs_sqrt_log_abs_det(ps, qs, init_diag)
+
+
+@jit
 def l2_distance_matrix(vals: jnp.ndarray) -> jnp.ndarray:
     return vmap(lambda x: vmap(lambda y: jnp.sum(jnp.square(x - y)))(vals))(vals) ** 0.5
 
