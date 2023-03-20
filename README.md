@@ -58,10 +58,12 @@ scenario_rastrigin = Rastrigin(5)
 
 n = int(1e5)
 
-mala = mocat.Overdamped()
+mala = mocat.Underdamped(leapfrog_steps=1, friction=jnp.inf)
+mala.name = 'Overdamped'
 mala_samps = mocat.run(scenario_rastrigin, mala, n, random_key, correction=mocat.RMMetropolis())
 
-hmc = mocat.HMC(leapfrog_steps=10)
+hmc = mocat.Underdamped(leapfrog_steps=10, friction=jnp.inf)
+hmc.name = 'HMC'
 hmc_samps = mocat.run(scenario_rastrigin, hmc, n, random_key, correction=mocat.RMMetropolis())
 ```
 
@@ -72,14 +74,14 @@ fig, axes = plt.subplots(3, 2)
 mocat.plot_2d_samples(mala_samps, ax=axes[0,0])
 mocat.plot_2d_samples(hmc_samps, ax=axes[0,1])
 
-mocat.trace_plot(mala_samps, last_n=1000, ax=axes[1,0], title=None)
-mocat.trace_plot(hmc_samps, last_n=1000, ax=axes[1,1], title=None)
+mocat.trace_plot(mala_samps, last_n=1000, ax=axes[1,0])
+mocat.trace_plot(hmc_samps, last_n=1000, ax=axes[1,1])
 
-mocat.autocorrelation_plot(mala_samps, ax=axes[2,0], title=None)
-mocat.autocorrelation_plot(hmc_samps, ax=axes[2,1], title=None)
+mocat.autocorrelation_plot(mala_samps, ax=axes[2,0])
+mocat.autocorrelation_plot(hmc_samps, ax=axes[2,1])
 
 axes[0,0].set_title(scenario_rastrigin.name + ': ' + mala.name)
-axes[0,1].set_title(scenario_rastrigin.name + ': ' + mala.name)
+axes[0,1].set_title(scenario_rastrigin.name + ': ' + hmc.name)
 plt.tight_layout()
 ```
 ![comp-metrics](examples/images/MALA_HMC_Rastrigin.png?raw=true "MALA vs HMC - Rastrigin")
